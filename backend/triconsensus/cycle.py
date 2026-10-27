@@ -9,9 +9,10 @@ import pandas as pd
 
 from .agents import AgentService
 from .config import Settings
-from .db import PersistenceFailure, SupabaseRepository
+from .db import SupabaseRepository
 from .execution import PaperExecutionEngine
 from .features import build_features
+from .levels import build_trade_levels
 from .llm import OpenRouterProvider
 from .market_data import BybitPublicClient, MarketDataFailure
 from .ml_evidence import neutral_ml_evidence
@@ -52,13 +53,17 @@ class PaperDecisionCycle:
             "max_concurrent_trades": self.settings.max_concurrent_trades,
             "min_risk_reward": self.settings.min_risk_reward,
             "max_spread_bps": self.settings.max_spread_bps,
+            "trade_level_formula": "entry=last; stop=1.5ATR; tp1=minRR; tp2=1.5xTP1distance",
             "model_id": self.settings.model_id,
             "mode": "paper",
         }
 
     async def run(self, symbol: str, account_state: dict) -> dict:
         normalized = symbol.upper().replace("/", "").replace("-", "")
-        display_symbol = "BTC/USDT" if normalized == "BTCUSDT" else "ETH/USDT"
+        symbol_map = {"BTCUSDT": "BTC/USDT", "ETHUSDT": "ETH/USDT"}
+        if normalized not in symbol_map:
+            return {"outcome": "NO_TRADE", "reason": "unsupported_symbol"}
+        display_symbol = symbol_map[normalized]
 
         experiment = self.repo.ensure_experiment(
             version="V1",
@@ -106,20 +111,28 @@ class PaperDecisionCycle:
             )
 
         primary = timeframe_features["15m"]
+        allowed_levels = build_trade_levels(
+            last_price=float(snapshot["ticker"]["last_price"]),
+            atr=float(primary["atr_14"]),
+            min_risk_reward=self.settings.min_risk_reward,
+        )
+
         feature_row = self.repo.insert(
             "feature_snapshots",
             {
                 "experiment_id": experiment["id"],
                 "market_snapshot_id": market_row["id"],
                 "symbol": display_symbol,
-                "feature_version": "v1.0.0",
+                "feature_version": "v1.1.0",
                 "features": {
                     "primary": primary,
                     "timeframes": timeframe_features,
+                    "allowed_trade_levels": asdict(allowed_levels),
                 },
                 "leakage_guard": {
                     "open_candle_excluded": True,
                     "ordered_oldest_to_newest": True,
+                    "llm_numeric_levels_restricted": True,
                 },
             },
         )
@@ -149,6 +162,7 @@ class PaperDecisionCycle:
             quant_features=primary,
             ml_evidence=asdict(ml),
             account_state=account_state,
+            allowed_levels=allowed_levels,
         )
 
         agent_ids = {}
@@ -168,12 +182,13 @@ class PaperDecisionCycle:
                     "agent_role": role,
                     "provider": "openrouter",
                     "model_id": self.settings.model_id,
-                    "prompt_version": "v1",
+                    "prompt_version": "v1.1",
                     "input_context_hash": _checksum(
                         {
                             "market": market_context,
                             "features": primary,
                             "ml": asdict(ml),
+                            "allowed_levels": asdict(allowed_levels),
                         }
                     ),
                     "output_json": output,
@@ -184,7 +199,7 @@ class PaperDecisionCycle:
                     ),
                     "confidence": output.get("confidence"),
                     "evidence": output.get("evidence") or [],
-                    "is_valid": True,
+                    "is_valid": result["reason"] != "strategist_used_unapproved_numeric_levels",
                 },
             )
             agent_ids[role] = row["id"]
@@ -222,7 +237,11 @@ class PaperDecisionCycle:
                 "experiment_id": experiment["id"],
                 "consensus_decision_id": consensus["id"],
                 "approved": True,
-                "checks": {"reason": risk["reason"]},
+                "checks": {
+                    "reason": risk["reason"],
+                    "numeric_levels_validated": True,
+                    "full_consensus": True,
+                },
                 "proposed_entry": entry,
                 "stop_loss": proposal["stop_loss"],
                 "take_profit_1": proposal["take_profit_1"],
