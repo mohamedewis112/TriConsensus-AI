@@ -236,7 +236,7 @@ class PaperDecisionCycle:
                 "risk_agent_run_id": agent_ids.get("risk_advocate"),
                 "outcome": consensus_outcome,
                 "full_consensus": full_consensus,
-                "reason": result["reason"],
+                "reason": result.get("consensus_reason") or result["reason"],
             },
         )
 
