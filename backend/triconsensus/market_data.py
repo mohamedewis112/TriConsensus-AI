@@ -164,6 +164,57 @@ class BybitPublicClient:
             raise MarketDataFailure(f"empty kline response for {symbol} {timeframe}")
         return parse_klines(rows, drop_open_candle=drop_open_candle)
 
+    async def historical_klines(
+        self,
+        symbol: str,
+        timeframe: str,
+        *,
+        start_ms: int,
+        end_ms: int,
+    ) -> list[dict]:
+        self._validate_symbol(symbol)
+        if timeframe not in INTERVALS:
+            raise ValueError(f"unsupported timeframe: {timeframe}")
+        if start_ms <= 0 or end_ms <= start_ms:
+            raise ValueError("invalid historical time range")
+
+        rows_by_start: dict[int, dict] = {}
+        page_end = end_ms
+
+        while page_end >= start_ms:
+            body = await self._get(
+                "/v5/market/kline",
+                {
+                    "category": "linear",
+                    "symbol": symbol,
+                    "interval": INTERVALS[timeframe],
+                    "start": start_ms,
+                    "end": page_end,
+                    "limit": 1000,
+                },
+            )
+            raw_rows = body.get("result", {}).get("list") or []
+            if not raw_rows:
+                break
+
+            page = parse_klines(raw_rows, drop_open_candle=False)
+            for candle in page:
+                candle_start = int(candle["start_ms"])
+                if start_ms <= candle_start <= end_ms:
+                    rows_by_start[candle_start] = candle
+
+            oldest = min(int(row[0]) for row in raw_rows)
+            if oldest <= start_ms or len(raw_rows) < 1000:
+                break
+            page_end = oldest - 1
+
+        candles = [rows_by_start[key] for key in sorted(rows_by_start)]
+        if not candles:
+            raise MarketDataFailure(
+                f"no historical klines for {symbol} {timeframe} in requested range"
+            )
+        return candles
+
     async def multi_timeframe_snapshot(self, symbol: str, *, limit: int = 200) -> dict:
         ticker = await self.ticker(symbol)
         orderbook = await self.orderbook(symbol, limit=50)
