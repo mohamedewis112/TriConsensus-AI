@@ -5,6 +5,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+import hashlib
 import json
 from pathlib import Path
 import pickle
@@ -12,6 +13,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
+from .archive_data import BybitPublicArchiveClient
 from .config import Settings
 from .features import build_features
 from .market_data import BybitPublicClient
@@ -146,6 +148,7 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
         raise ValueError("dataset too small for walk-forward validation")
 
     aggregate: dict[str, list[dict[str, float]]] = defaultdict(list)
+    baseline_rows: list[dict[str, float]] = []
     fold_reports: list[dict] = []
 
     for fold_number, split in enumerate(splits, start=1):
@@ -156,6 +159,19 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
 
         if y_train.nunique() < 2 or y_test.nunique() < 2:
             continue
+
+        train_positive_rate = float(y_train.mean())
+        majority_class = int(train_positive_rate >= 0.5)
+        baseline_accuracy = float((y_test == majority_class).mean())
+        baseline_brier = float(
+            np.mean((y_test.to_numpy(dtype=float) - train_positive_rate) ** 2)
+        )
+        baseline = {
+            "accuracy": baseline_accuracy,
+            "brier_score": baseline_brier,
+            "train_positive_rate": train_positive_rate,
+        }
+        baseline_rows.append(baseline)
 
         scores = compare_binary_models(x_train, y_train, x_test, y_test)
         score_payload = [asdict(score) for score in scores]
@@ -171,6 +187,7 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
                 "test_end_ms": dataset.timestamps[split.test_end - 1],
                 "train_rows": len(x_train),
                 "test_rows": len(x_test),
+                "baseline": baseline,
                 "scores": score_payload,
             }
         )
@@ -178,12 +195,35 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
     if not fold_reports:
         raise ValueError("no valid walk-forward folds with both target classes")
 
+    baseline_summary = {
+        "folds": len(baseline_rows),
+        "mean_accuracy": float(np.mean([x["accuracy"] for x in baseline_rows])),
+        "mean_brier_score": float(np.mean([x["brier_score"] for x in baseline_rows])),
+    }
+
     summary = {}
     for family, scores in aggregate.items():
+        mean_accuracy = float(np.mean([s["accuracy"] for s in scores]))
+        mean_brier = float(np.mean([s["brier_score"] for s in scores]))
+        brier_wins = sum(
+            1
+            for score, baseline in zip(scores, baseline_rows, strict=True)
+            if score["brier_score"] < baseline["brier_score"]
+        )
         summary[family] = {
             "folds": len(scores),
-            "mean_accuracy": float(np.mean([s["accuracy"] for s in scores])),
-            "mean_brier_score": float(np.mean([s["brier_score"] for s in scores])),
+            "mean_accuracy": mean_accuracy,
+            "mean_brier_score": mean_brier,
+            "accuracy_lift_vs_baseline": (
+                mean_accuracy - baseline_summary["mean_accuracy"]
+            ),
+            "brier_improvement_vs_baseline": (
+                (baseline_summary["mean_brier_score"] - mean_brier)
+                / baseline_summary["mean_brier_score"]
+                if baseline_summary["mean_brier_score"] > 0
+                else 0.0
+            ),
+            "brier_wins_vs_baseline": brier_wins,
         }
 
     selected = min(
@@ -193,9 +233,25 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
             -summary[family]["mean_accuracy"],
         ),
     )
+    selected_summary = summary[selected]
+    evidence_gate_pass = (
+        len(fold_reports) >= 3
+        and selected_summary["brier_improvement_vs_baseline"] >= 0.02
+        and selected_summary["brier_wins_vs_baseline"] >= max(
+            2,
+            int(np.ceil(len(fold_reports) * 0.67)),
+        )
+    )
     return {
         "selected_model_family": selected,
+        "baseline_summary": baseline_summary,
         "model_summary": summary,
+        "evidence_gate": {
+            "passed": evidence_gate_pass,
+            "minimum_folds": 3,
+            "minimum_mean_brier_improvement": 0.02,
+            "minimum_brier_fold_win_fraction": 0.67,
+        },
         "folds": fold_reports,
     }
 
@@ -224,33 +280,46 @@ async def train_symbol(
     symbol: str,
     days: int,
     output_dir: Path,
+    source: str = "archive",
     horizon: int = 4,
     positive_return_threshold: float = 0.0015,
 ) -> dict:
     if symbol not in {"BTCUSDT", "ETHUSDT"}:
         raise ValueError("V1 trains BTCUSDT and ETHUSDT only")
-    if not 14 <= days <= 365:
-        raise ValueError("days must be between 14 and 365")
+    if not 7 <= days <= 365:
+        raise ValueError("days must be between 7 and 365")
+    if source not in {"archive", "rest"}:
+        raise ValueError("source must be archive or rest")
 
     settings = Settings()
-    client = BybitPublicClient(settings)
     end = datetime.now(UTC)
-    end_ms = int(end.timestamp() * 1000)
-    start_ms = int((end - timedelta(days=days)).timestamp() * 1000)
 
-    candles = await client.historical_klines(
-        symbol,
-        "15m",
-        start_ms=start_ms,
-        end_ms=end_ms,
-    )
-    # The newest candle may still be forming. Never train on it.
-    interval_ms = 15 * 60 * 1000
-    last_closed_start = (end_ms // interval_ms) * interval_ms - interval_ms
-    candles = [
-        candle for candle in candles
-        if int(candle["start_ms"]) <= last_closed_start
-    ]
+    if source == "archive":
+        if days > 90:
+            raise ValueError("archive source supports at most 90 days per run")
+        candles = await BybitPublicArchiveClient().historical_15m(
+            symbol,
+            days=days,
+        )
+    else:
+        if days < 14:
+            raise ValueError("REST training requires at least 14 days")
+        client = BybitPublicClient(settings)
+        end_ms = int(end.timestamp() * 1000)
+        start_ms = int((end - timedelta(days=days)).timestamp() * 1000)
+        candles = await client.historical_klines(
+            symbol,
+            "15m",
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+        interval_ms = 15 * 60 * 1000
+        last_closed_start = (end_ms // interval_ms) * interval_ms - interval_ms
+        candles = [
+            candle
+            for candle in candles
+            if int(candle["start_ms"]) <= last_closed_start
+        ]
 
     dataset = build_training_dataset(
         candles,
@@ -270,9 +339,10 @@ async def train_symbol(
     )
 
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "symbol": symbol,
         "timeframe": "15m",
+        "data_source": f"bybit_public_{source}",
         "generated_at": datetime.now(UTC).isoformat(),
         "history_start_ms": int(candles[0]["start_ms"]),
         "history_end_ms": int(candles[-1]["start_ms"]),
@@ -296,7 +366,8 @@ async def train_symbol(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train TriConsensus V1 ML evidence model")
     parser.add_argument("--symbol", required=True, choices=["BTCUSDT", "ETHUSDT"])
-    parser.add_argument("--days", type=int, default=45)
+    parser.add_argument("--days", type=int, default=14)
+    parser.add_argument("--source", choices=["archive", "rest"], default="archive")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
@@ -305,6 +376,7 @@ def main() -> None:
             symbol=args.symbol,
             days=args.days,
             output_dir=Path(args.output_dir),
+            source=args.source,
         )
     )
     print(json.dumps(report, indent=2, sort_keys=True))
