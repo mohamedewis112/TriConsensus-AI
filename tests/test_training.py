@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from triconsensus.training import (
     ML_FEATURE_COLUMNS,
     build_training_dataset,
