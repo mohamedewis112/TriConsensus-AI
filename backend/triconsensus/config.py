@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     model_fallbacks: str = "openrouter/free"
 
     supabase_url: str | None = None
+    supabase_secret_key: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
     control_api_key: SecretStr | None = None
 
