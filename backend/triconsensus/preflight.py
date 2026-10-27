@@ -9,6 +9,7 @@ from .market_data import BybitPublicClient, MarketDataFailure
 
 async def run_preflight(settings: Settings) -> dict:
     checks: dict[str, dict] = {}
+    repo: SupabaseRepository | None = None
 
     try:
         ticker = await BybitPublicClient(settings).ticker("BTCUSDT")
@@ -34,8 +35,41 @@ async def run_preflight(settings: Settings) -> dict:
     except PersistenceFailure as exc:
         checks["supabase"] = {"ok": False, "reason": type(exc).__name__}
 
+    if repo is None:
+        checks["ml_models"] = {
+            "ok": False,
+            "reason": "supabase_unavailable",
+            "symbols": {},
+        }
+    else:
+        try:
+            btc = repo.latest_ml_model("BTC/USDT")
+            eth = repo.latest_ml_model("ETH/USDT")
+            symbols = {
+                "BTC/USDT": btc["model_version"] if btc else None,
+                "ETH/USDT": eth["model_version"] if eth else None,
+            }
+            checks["ml_models"] = {
+                "ok": btc is not None and eth is not None,
+                "reason": (
+                    None
+                    if btc is not None and eth is not None
+                    else "trained_models_not_registered_for_both_symbols"
+                ),
+                "symbols": symbols,
+            }
+        except PersistenceFailure as exc:
+            checks["ml_models"] = {
+                "ok": False,
+                "reason": type(exc).__name__,
+                "symbols": {},
+            }
+
     if settings.openrouter_api_key is None:
-        checks["openrouter"] = {"ok": False, "reason": "OPENROUTER_API_KEY_missing"}
+        checks["openrouter"] = {
+            "ok": False,
+            "reason": "OPENROUTER_API_KEY_missing",
+        }
     else:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -65,11 +99,15 @@ async def run_preflight(settings: Settings) -> dict:
                 ),
             }
         except (httpx.HTTPError, ValueError, KeyError) as exc:
-            checks["openrouter"] = {"ok": False, "reason": type(exc).__name__}
+            checks["openrouter"] = {
+                "ok": False,
+                "reason": type(exc).__name__,
+            }
 
     checks["safety"] = {
         "ok": str(settings.trading_mode).lower() in {"paper", "dry_run", "demo"},
         "live_trading": False,
+        "kill_switch_active": settings.emergency_kill_switch,
         "mode": str(settings.trading_mode),
     }
 
