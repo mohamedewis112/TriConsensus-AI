@@ -98,14 +98,27 @@ class DecisionOrchestrator:
         decision = self.risk.evaluate(
             RiskInput(
                 equity=float(account_state["equity"]),
+                day_start_equity=float(
+                    account_state.get("day_start_equity") or account_state["equity"]
+                ),
                 daily_pnl=float(account_state.get("daily_pnl", 0)),
                 peak_equity=float(account_state["peak_equity"]),
                 open_positions=int(account_state.get("open_positions", 0)),
+                current_exposure=float(account_state.get("current_exposure", 0)),
+                correlated_exposure=float(account_state.get("correlated_exposure", 0)),
+                losing_streak=int(account_state.get("losing_streak", 0)),
+                minutes_since_last_loss=int(
+                    account_state.get("minutes_since_last_loss", 999999)
+                ),
+                kill_switch_active=bool(account_state.get("kill_switch_active", False)),
                 entry=entry,
                 stop_loss=float(proposal.stop_loss),
                 take_profit=float(proposal.take_profit_1),
                 spread_bps=float(quant_features.get("spread_bps") or 0),
                 slippage_bps=float(account_state.get("slippage_bps", 2)),
+                realized_volatility_20=float(
+                    quant_features.get("realized_vol_20") or 0
+                ),
                 market_data_age_ms=int(market_context["market_data_age_ms"]),
                 side=consensus.outcome.value,
             )
