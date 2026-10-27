@@ -4,7 +4,6 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel, Field
 
 from .config import settings
 from .cycle import PaperDecisionCycle
@@ -19,20 +18,6 @@ app = FastAPI(title="TriConsensus AI API", version="0.1.0")
 market = BybitPublicClient(settings)
 
 
-class AccountState(BaseModel):
-    equity: float = Field(gt=0)
-    day_start_equity: float | None = Field(default=None, gt=0)
-    peak_equity: float = Field(gt=0)
-    daily_pnl: float = 0
-    open_positions: int = Field(default=0, ge=0)
-    current_exposure: float = Field(default=0, ge=0)
-    correlated_exposure: float = Field(default=0, ge=0)
-    losing_streak: int = Field(default=0, ge=0)
-    minutes_since_last_loss: int = Field(default=999999, ge=0)
-    kill_switch_active: bool = False
-    slippage_bps: float | None = Field(default=None, ge=0)
-
-
 def _empty_summary(version: str) -> dict:
     metrics = calculate_metrics([], starting_equity=settings.paper_starting_balance)
     return {
@@ -42,6 +27,7 @@ def _empty_summary(version: str) -> dict:
         "today_pnl": 0.0,
         "open_positions": 0,
         "closed_trades": 0,
+        "kill_switch_active": settings.emergency_kill_switch,
         **asdict(metrics),
     }
 
@@ -52,6 +38,7 @@ async def health() -> dict:
         "status": "ok",
         "trading_mode": settings.trading_mode,
         "live_trading": False,
+        "kill_switch_active": settings.emergency_kill_switch,
     }
 
 
@@ -70,14 +57,9 @@ async def get_market(symbol: str) -> dict:
 
 
 @app.post("/v1/paper-cycle/{symbol}", dependencies=[Depends(require_control_key)])
-async def paper_cycle(symbol: str, account: AccountState) -> dict:
+async def paper_cycle(symbol: str) -> dict:
     try:
-        state = account.model_dump()
-        state["day_start_equity"] = state["day_start_equity"] or state["equity"]
-        if state["slippage_bps"] is None:
-            state["slippage_bps"] = settings.paper_slippage_bps
-        cycle = PaperDecisionCycle(settings)
-        return await cycle.run(symbol, state)
+        return await PaperDecisionCycle(settings).run(symbol)
     except PersistenceFailure as exc:
         raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
 
@@ -122,6 +104,7 @@ async def analytics_summary(version: str = "V1") -> dict:
             "today_pnl": today_pnl,
             "open_positions": len(open_trades),
             "closed_trades": len(closed),
+            "kill_switch_active": settings.emergency_kill_switch,
             **asdict(metrics),
         }
     except PersistenceFailure as exc:
