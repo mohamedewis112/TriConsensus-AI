@@ -17,9 +17,12 @@ def walk_forward_splits(
     train_size: int,
     test_size: int,
     step_size: int | None = None,
+    embargo_size: int = 0,
 ) -> list[WalkForwardSplit]:
     if n_samples <= 0 or train_size <= 0 or test_size <= 0:
         raise ValueError("sample and window sizes must be positive")
+    if embargo_size < 0:
+        raise ValueError("embargo_size cannot be negative")
     step = step_size or test_size
     if step <= 0:
         raise ValueError("step_size must be positive")
@@ -28,7 +31,7 @@ def walk_forward_splits(
     train_start = 0
     while True:
         train_end = train_start + train_size
-        test_start = train_end
+        test_start = train_end + embargo_size
         test_end = test_start + test_size
         if test_end > n_samples:
             break
