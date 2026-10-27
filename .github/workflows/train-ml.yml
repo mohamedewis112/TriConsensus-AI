@@ -6,7 +6,7 @@ on:
       days:
         description: "Historical days per symbol"
         required: true
-        default: "45"
+        default: "14"
   push:
     branches: ["feat/v1-foundation"]
     paths:
@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           DAYS="${{ inputs.days }}"
-          if [ -z "$DAYS" ]; then DAYS="45"; fi
+          if [ -z "$DAYS" ]; then DAYS="14"; fi
           echo "days=$DAYS" >> "$GITHUB_OUTPUT"
 
       - name: Install ML training dependencies
@@ -50,7 +50,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.training             --symbol "${{ matrix.symbol }}"             --days "${{ steps.config.outputs.days }}"             --output-dir "artifacts/${{ matrix.symbol }}"
+          python -m triconsensus.training             --symbol "${{ matrix.symbol }}"             --days "${{ steps.config.outputs.days }}"             --source archive             --output-dir "artifacts/${{ matrix.symbol }}"
 
       - uses: actions/upload-artifact@v4
         with:
