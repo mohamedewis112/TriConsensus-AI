@@ -31,3 +31,15 @@ def test_backtest_charges_fees_and_slippage():
     assert trade.net_pnl < 10
     assert trade.fees > 0
     assert trade.slippage_cost > 0
+
+
+def test_walk_forward_embargo_prevents_label_overlap():
+    splits = walk_forward_splits(
+        100,
+        train_size=40,
+        test_size=10,
+        embargo_size=4,
+    )
+    assert splits
+    for split in splits:
+        assert split.test_start - split.train_end == 4
