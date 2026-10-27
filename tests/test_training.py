@@ -61,5 +61,5 @@ def test_ml_vector_is_scale_normalized_for_price_features():
     }
     vector = ml_vector(features)
     assert list(vector) == ML_FEATURE_COLUMNS
-    assert vector["ema20_distance"] == 0.01
-    assert vector["atr_normalized"] == 0.02
+    assert vector["ema20_distance"] == pytest.approx(0.01)
+    assert vector["atr_normalized"] == pytest.approx(0.02)
