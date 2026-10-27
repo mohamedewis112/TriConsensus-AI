@@ -19,7 +19,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi pydantic pydantic-settings httpx pytest pytest-asyncio pandas supabase "langgraph>=1.2.16,<2"
+          pip install             "fastapi>=0.115,<1"             "pydantic>=2.10,<3"             "pydantic-settings>=2.7,<3"             "httpx>=0.28,<1"             "pytest>=8.3,<9"             "pytest-asyncio>=0.25,<2"             "numpy>=2.1,<3"             "pandas>=2.2,<4"             "supabase>=2.13,<3"             "langgraph>=1.2.16,<2"
 
       - name: Run fail-closed tests
         env:
