@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
 
     paper_starting_balance: float = 10_000.0
     paper_slippage_bps: float = Field(default=2.0, ge=0, le=10)
+    emergency_kill_switch: bool = False
+
     risk_per_trade: float = Field(default=0.0025, gt=0, le=0.01)
     max_daily_loss: float = Field(default=0.01, gt=0, le=0.05)
     max_drawdown: float = Field(default=0.05, gt=0, le=0.20)
