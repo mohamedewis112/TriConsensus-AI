@@ -14,9 +14,15 @@ market = BybitPublicClient(settings)
 
 class AccountState(BaseModel):
     equity: float = Field(gt=0)
+    day_start_equity: float | None = Field(default=None, gt=0)
     peak_equity: float = Field(gt=0)
     daily_pnl: float = 0
     open_positions: int = Field(default=0, ge=0)
+    current_exposure: float = Field(default=0, ge=0)
+    correlated_exposure: float = Field(default=0, ge=0)
+    losing_streak: int = Field(default=0, ge=0)
+    minutes_since_last_loss: int = Field(default=999999, ge=0)
+    kill_switch_active: bool = False
     slippage_bps: float = Field(default=2, ge=0)
 
 
@@ -41,7 +47,9 @@ async def get_market(symbol: str) -> dict:
 @app.post("/v1/paper-cycle/{symbol}")
 async def paper_cycle(symbol: str, account: AccountState) -> dict:
     try:
+        state = account.model_dump()
+        state["day_start_equity"] = state["day_start_equity"] or state["equity"]
         cycle = PaperDecisionCycle(settings)
-        return await cycle.run(symbol, account.model_dump())
+        return await cycle.run(symbol, state)
     except PersistenceFailure as exc:
         raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
