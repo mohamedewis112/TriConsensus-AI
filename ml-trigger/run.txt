@@ -1,0 +1,1 @@
+TriConsensus V1 initial ML training trigger: 45 days, BTCUSDT + ETHUSDT.\n
