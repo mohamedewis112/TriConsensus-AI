@@ -7,6 +7,10 @@ on:
         description: "Historical days per symbol"
         required: true
         default: "45"
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "ml-trigger/run.txt"
 
 permissions:
   contents: read
@@ -25,6 +29,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve training days
+        id: config
+        shell: bash
+        run: |
+          DAYS="${{ inputs.days }}"
+          if [ -z "$DAYS" ]; then DAYS="45"; fi
+          echo "days=$DAYS" >> "$GITHUB_OUTPUT"
+
       - name: Install ML training dependencies
         run: |
           python -m pip install --upgrade pip
@@ -34,7 +46,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.training             --symbol "${{ matrix.symbol }}"             --days "${{ inputs.days }}"             --output-dir "artifacts/${{ matrix.symbol }}"
+          python -m triconsensus.training             --symbol "${{ matrix.symbol }}"             --days "${{ steps.config.outputs.days }}"             --output-dir "artifacts/${{ matrix.symbol }}"
 
       - uses: actions/upload-artifact@v4
         with:
