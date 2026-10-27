@@ -200,6 +200,25 @@ def evaluate_walk_forward(dataset: TrainingDataset) -> dict:
     }
 
 
+def save_native_model(model, model_family: str, output_dir: Path) -> tuple[Path, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if model_family == "lightgbm":
+        path = output_dir / "model.txt"
+        model.booster_.save_model(str(path))
+    elif model_family == "xgboost":
+        path = output_dir / "model.json"
+        model.save_model(str(path))
+    elif model_family == "catboost":
+        path = output_dir / "model.cbm"
+        model.save_model(str(path))
+    else:
+        raise ValueError(f"unsupported model family: {model_family}")
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return path, digest
+
+
 async def train_symbol(
     *,
     symbol: str,
@@ -244,10 +263,11 @@ async def train_symbol(
     final_model = make_binary_model(selected)
     final_model.fit(dataset.x, dataset.y)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    model_path = output_dir / "model.pkl"
-    with model_path.open("wb") as handle:
-        pickle.dump(final_model, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    model_path, artifact_sha256 = save_native_model(
+        final_model,
+        selected,
+        output_dir,
+    )
 
     report = {
         "schema_version": 1,
@@ -262,6 +282,8 @@ async def train_symbol(
         "horizon_candles": horizon,
         "positive_return_threshold": positive_return_threshold,
         "feature_columns": ML_FEATURE_COLUMNS,
+        "artifact_filename": model_path.name,
+        "artifact_sha256": artifact_sha256,
         **evaluation,
     }
     (output_dir / "report.json").write_text(
