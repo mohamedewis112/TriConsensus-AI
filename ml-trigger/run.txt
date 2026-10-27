@@ -1,0 +1,1 @@
+TriConsensus V1 OOS training trigger after green CI. Dataset: Bybit 15m, 45 days, BTCUSDT + ETHUSDT.
