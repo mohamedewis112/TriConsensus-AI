@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     control_api_key: SecretStr | None = None
 
     paper_starting_balance: float = 10_000.0
+    paper_slippage_bps: float = Field(default=2.0, ge=0, le=10)
     risk_per_trade: float = Field(default=0.0025, gt=0, le=0.01)
     max_daily_loss: float = Field(default=0.01, gt=0, le=0.05)
     max_drawdown: float = Field(default=0.05, gt=0, le=0.20)
@@ -48,6 +49,8 @@ class Settings(BaseSettings):
     def prohibit_live_trading(self) -> "Settings":
         if str(self.trading_mode).lower() not in {"paper", "dry_run", "demo"}:
             raise ValueError("Live trading is disabled in TriConsensus AI V1")
+        if self.paper_slippage_bps > self.max_slippage_bps:
+            raise ValueError("paper slippage cannot exceed the risk-engine slippage ceiling")
         return self
 
 
