@@ -101,6 +101,7 @@ class PaperDecisionCycle:
                 "captured_at": snapshot["ticker"]["captured_at"],
                 "source": "bybit",
                 "market_data": snapshot,
+                "orderbook": snapshot["orderbook"],
                 "funding_rate": snapshot["ticker"]["funding_rate"],
                 "open_interest": snapshot["ticker"]["open_interest"],
                 "market_data_age_ms": snapshot["market_data_age_ms"],
@@ -114,6 +115,7 @@ class PaperDecisionCycle:
                 _frame(candles),
                 bid=snapshot["ticker"]["bid"],
                 ask=snapshot["ticker"]["ask"],
+                orderbook=snapshot["orderbook"],
             )
 
         primary = timeframe_features["15m"]
@@ -129,7 +131,7 @@ class PaperDecisionCycle:
                 "experiment_id": experiment["id"],
                 "market_snapshot_id": market_row["id"],
                 "symbol": display_symbol,
-                "feature_version": "v1.2.0",
+                "feature_version": "v1.3.0",
                 "features": {
                     "primary": primary,
                     "timeframes": timeframe_features,
@@ -159,6 +161,7 @@ class PaperDecisionCycle:
 
         market_context = {
             "ticker": snapshot["ticker"],
+            "orderbook": snapshot["orderbook"],
             "market_data_age_ms": snapshot["market_data_age_ms"],
             "timeframes": timeframe_features,
         }
