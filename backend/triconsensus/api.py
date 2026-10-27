@@ -11,6 +11,8 @@ from .cycle import PaperDecisionCycle
 from .db import PersistenceFailure, SupabaseRepository
 from .market_data import BybitPublicClient, MarketDataFailure
 from .metrics import calculate_metrics
+from .paper_monitor import PaperTradeMonitor
+from .preflight import run_preflight
 from .security import require_control_key
 
 app = FastAPI(title="TriConsensus AI API", version="0.1.0")
@@ -28,7 +30,7 @@ class AccountState(BaseModel):
     losing_streak: int = Field(default=0, ge=0)
     minutes_since_last_loss: int = Field(default=999999, ge=0)
     kill_switch_active: bool = False
-    slippage_bps: float = Field(default=2, ge=0)
+    slippage_bps: float | None = Field(default=None, ge=0)
 
 
 def _empty_summary(version: str) -> dict:
@@ -53,6 +55,11 @@ async def health() -> dict:
     }
 
 
+@app.get("/v1/preflight", dependencies=[Depends(require_control_key)])
+async def preflight() -> dict:
+    return await run_preflight(settings)
+
+
 @app.get("/v1/market/{symbol}", dependencies=[Depends(require_control_key)])
 async def get_market(symbol: str) -> dict:
     normalized = symbol.upper().replace("-", "").replace("/", "")
@@ -67,13 +74,23 @@ async def paper_cycle(symbol: str, account: AccountState) -> dict:
     try:
         state = account.model_dump()
         state["day_start_equity"] = state["day_start_equity"] or state["equity"]
+        if state["slippage_bps"] is None:
+            state["slippage_bps"] = settings.paper_slippage_bps
         cycle = PaperDecisionCycle(settings)
         return await cycle.run(symbol, state)
     except PersistenceFailure as exc:
         raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
 
 
-@app.post("/v1/paper-monitor", dependencies=[Depends(require_control_key)])\nasync def paper_monitor(version: str = "V1") -> dict:\n    try:\n        return await PaperTradeMonitor(settings).run(version=version)\n    except PersistenceFailure as exc:\n        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc\n\n\n@app.get("/v1/analytics/summary", dependencies=[Depends(require_control_key)])
+@app.post("/v1/paper-monitor", dependencies=[Depends(require_control_key)])
+async def paper_monitor(version: str = "V1") -> dict:
+    try:
+        return await PaperTradeMonitor(settings).run(version=version)
+    except PersistenceFailure as exc:
+        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc
+
+
+@app.get("/v1/analytics/summary", dependencies=[Depends(require_control_key)])
 async def analytics_summary(version: str = "V1") -> dict:
     try:
         repo = SupabaseRepository(settings)
