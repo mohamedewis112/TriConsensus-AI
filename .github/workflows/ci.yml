@@ -25,3 +25,27 @@ jobs:
         env:
           PYTHONPATH: backend
         run: pytest -q
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build dashboard
+        env:
+          TRICONSENSUS_API_URL: http://127.0.0.1:8000
+          TRICONSENSUS_API_KEY: ci-placeholder-never-used-at-build
+        run: npm run build
