@@ -4,7 +4,7 @@ import argparse
 import asyncio
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import hashlib
 import json
 import math
@@ -358,10 +358,15 @@ async def train_v2(
     symbol: str,
     days: int,
     output_dir: Path,
+    end_day: date | None = None,
 ) -> dict:
     if symbol not in {"BTCUSDT", "ETHUSDT"}:
         raise ValueError("unsupported V2 symbol")
-    candles = await BybitPublicArchiveClient().historical_15m(symbol, days=days)
+    candles = await BybitPublicArchiveClient().historical_15m(
+        symbol,
+        days=days,
+        end_day=end_day,
+    )
     dataset = build_v2_dataset(candles)
 
     # Two taker fees + 2 bps adverse slippage on entry and exit.
@@ -393,6 +398,7 @@ async def train_v2(
         "data_source": "bybit_public_archive",
         "generated_at": datetime.now(UTC).isoformat(),
         "history_days": days,
+        "archive_end_day": end_day.isoformat() if end_day else "T-2",
         "history_start_ms": int(candles[0]["start_ms"]),
         "history_end_ms": int(candles[-1]["start_ms"]),
         "candle_count": len(candles),
@@ -415,13 +421,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TriConsensus ML V2 regression research")
     parser.add_argument("--symbol", required=True, choices=["BTCUSDT", "ETHUSDT"])
     parser.add_argument("--days", type=int, default=14)
+    parser.add_argument("--end-date", default=None)
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
+    end_day = date.fromisoformat(args.end_date) if args.end_date else None
     report = asyncio.run(
         train_v2(
             symbol=args.symbol,
             days=args.days,
             output_dir=Path(args.output_dir),
+            end_day=end_day,
         )
     )
     print(json.dumps(report, indent=2, sort_keys=True))
