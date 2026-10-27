@@ -138,13 +138,10 @@ class PaperTradeMonitor:
                 )
                 continue
 
-            slippage_bps = float(
-                trade.get("realized_slippage_bps")
-                or self.settings.max_slippage_bps / 5
+            slippage_bps = min(
+                self.settings.paper_slippage_bps,
+                self.settings.max_slippage_bps,
             )
-            # Use the configured conservative default (2 bps in normal V1 flow)
-            # but never silently exceed the risk-engine ceiling.
-            slippage_bps = min(slippage_bps, self.settings.max_slippage_bps)
             fill = self.execution.close_market(
                 position_side=str(trade["side"]),
                 requested_price=last_price,
