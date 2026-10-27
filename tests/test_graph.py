@@ -1,0 +1,105 @@
+import pytest
+
+from triconsensus.config import Settings
+from triconsensus.domain import (
+    Bias,
+    DevilsAdvocate,
+    MarketIntel,
+    RiskVerdict,
+    TradeDecision,
+    TradeProposal,
+)
+from triconsensus.graph import TriConsensusGraph
+from triconsensus.levels import build_trade_levels
+from triconsensus.risk import DeterministicRiskEngine
+
+
+class ApprovingAgents:
+    async def market_intelligence(self, context):
+        return MarketIntel(
+            market_regime="trend",
+            bias=Bias.BULLISH,
+            confidence=0.9,
+            evidence=["trend"],
+        )
+
+    async def strategist(self, context):
+        levels = context["allowed_trade_levels"]["long"]
+        return TradeProposal(
+            decision=TradeDecision.LONG,
+            symbol=context["symbol"],
+            entry_zone=[levels["entry"]],
+            stop_loss=levels["stop_loss"],
+            take_profit_1=levels["take_profit_1"],
+            take_profit_2=levels["take_profit_2"],
+            risk_reward=1.5,
+            confidence=0.8,
+            evidence=["quant_levels"],
+        )
+
+    async def risk_advocate(self, context):
+        return DevilsAdvocate(
+            verdict=RiskVerdict.APPROVE,
+            confidence=0.8,
+            evidence=["no_material_veto"],
+        )
+
+
+class VetoAgents(ApprovingAgents):
+    async def risk_advocate(self, context):
+        return DevilsAdvocate(
+            verdict=RiskVerdict.VETO,
+            confidence=0.9,
+            reason="test veto",
+            evidence=["risk_flag"],
+        )
+
+
+def state():
+    settings = Settings()
+    levels = build_trade_levels(
+        last_price=100,
+        atr=2,
+        min_risk_reward=settings.min_risk_reward,
+    )
+    return settings, levels, {
+        "symbol": "BTC/USDT",
+        "market_context": {"market_data_age_ms": 100},
+        "quant_features": {
+            "spread_bps": 1,
+            "realized_vol_20": 0.02,
+        },
+        "ml_evidence": {"probability_positive": 0.6},
+        "account_state": {
+            "equity": 10000,
+            "day_start_equity": 10000,
+            "peak_equity": 10000,
+            "daily_pnl": 0,
+            "open_positions": 0,
+            "current_exposure": 0,
+            "correlated_exposure": 0,
+            "losing_streak": 0,
+            "minutes_since_last_loss": 999999,
+            "kill_switch_active": False,
+            "slippage_bps": 2,
+        },
+        "allowed_levels": levels,
+    }
+
+
+@pytest.mark.asyncio
+async def test_langgraph_full_consensus_reaches_risk_engine():
+    settings, _, inputs = state()
+    graph = TriConsensusGraph(ApprovingAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "LONG"
+    assert result["risk"]["approved"] is True
+
+
+@pytest.mark.asyncio
+async def test_langgraph_veto_routes_to_no_trade():
+    settings, _, inputs = state()
+    graph = TriConsensusGraph(VetoAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "NO_TRADE"
+    assert result["risk"] is None
