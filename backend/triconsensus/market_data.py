@@ -39,6 +39,44 @@ def parse_klines(rows: list[list[str]], *, drop_open_candle: bool = True) -> lis
     return parsed
 
 
+def parse_orderbook(result: dict) -> dict:
+    bids = [
+        {"price": float(price), "size": float(size)}
+        for price, size in (result.get("b") or [])
+    ]
+    asks = [
+        {"price": float(price), "size": float(size)}
+        for price, size in (result.get("a") or [])
+    ]
+    if not bids or not asks:
+        raise MarketDataFailure("empty orderbook side")
+
+    bid_size = sum(level["size"] for level in bids)
+    ask_size = sum(level["size"] for level in asks)
+    total = bid_size + ask_size
+    imbalance = (bid_size - ask_size) / total if total > 0 else 0.0
+
+    best_bid = bids[0]["price"]
+    best_ask = asks[0]["price"]
+    mid = (best_bid + best_ask) / 2
+    spread_bps = ((best_ask - best_bid) / mid) * 10_000 if mid > 0 else 0.0
+
+    return {
+        "bids": bids,
+        "asks": asks,
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "bid_depth": bid_size,
+        "ask_depth": ask_size,
+        "imbalance": imbalance,
+        "spread_bps": spread_bps,
+        "timestamp_ms": int(result.get("ts") or 0),
+        "update_id": result.get("u"),
+        "sequence": result.get("seq"),
+        "matching_engine_timestamp_ms": result.get("cts"),
+    }
+
+
 class BybitPublicClient:
     def __init__(self, settings) -> None:
         self.base_url = settings.bybit_base_url.rstrip("/")
@@ -87,6 +125,17 @@ class BybitPublicClient:
             "captured_at": datetime.now(UTC).isoformat(),
         }
 
+    async def orderbook(self, symbol: str, *, limit: int = 50) -> dict:
+        self._validate_symbol(symbol)
+        if not 1 <= limit <= 1000:
+            raise ValueError("orderbook limit must be between 1 and 1000")
+        body = await self._get(
+            "/v5/market/orderbook",
+            {"category": "linear", "symbol": symbol, "limit": limit},
+        )
+        result = body.get("result") or {}
+        return parse_orderbook(result)
+
     async def klines(
         self,
         symbol: str,
@@ -117,14 +166,21 @@ class BybitPublicClient:
 
     async def multi_timeframe_snapshot(self, symbol: str, *, limit: int = 200) -> dict:
         ticker = await self.ticker(symbol)
+        orderbook = await self.orderbook(symbol, limit=50)
         candles = {}
         for timeframe in INTERVALS:
             candles[timeframe] = await self.klines(symbol, timeframe, limit=limit)
 
         now_ms = int(time.time() * 1000)
-        data_age_ms = max(0, now_ms - int(ticker["server_time_ms"]))
+        timestamps = [
+            int(ticker["server_time_ms"]),
+            int(orderbook["timestamp_ms"] or ticker["server_time_ms"]),
+        ]
+        oldest_component_ms = min(timestamps)
+        data_age_ms = max(0, now_ms - oldest_component_ms)
         return {
             "ticker": ticker,
+            "orderbook": orderbook,
             "candles": candles,
             "market_data_age_ms": data_age_ms,
         }
