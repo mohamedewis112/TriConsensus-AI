@@ -15,8 +15,13 @@ def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
     losses = -delta.clip(upper=0)
     avg_gain = gains.ewm(alpha=1 / period, adjust=False).mean()
     avg_loss = losses.ewm(alpha=1 / period, adjust=False).mean()
+    loss_zero = avg_loss.eq(0)
+    gain_zero = avg_gain.eq(0)
     rs = avg_gain / avg_loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
+    rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.mask(loss_zero & ~gain_zero, 100.0)
+    rsi = rsi.mask(loss_zero & gain_zero, 50.0)
+    return rsi.astype(float)
 
 
 def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
