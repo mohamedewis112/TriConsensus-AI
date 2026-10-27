@@ -127,3 +127,19 @@ class SupabaseRepository:
         except Exception as exc:
             raise PersistenceFailure(f"decision replay read failed: {exc}") from exc
         return rows[0] if rows else None
+
+
+    def latest_ml_model(self, symbol: str) -> dict | None:
+        try:
+            rows = (
+                self.client.table("ml_models")
+                .select("*")
+                .eq("symbol", symbol)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"ml_models read failed: {exc}") from exc
+        return rows[0] if rows else None
