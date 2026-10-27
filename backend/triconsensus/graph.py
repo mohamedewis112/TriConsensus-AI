@@ -36,6 +36,15 @@ class TriConsensusGraph:
         self.risk = risk
         self.compiled = self._build()
 
+    def precheck_node(self, state: DecisionState) -> dict[str, Any]:
+        model_family = str(state.get("ml_evidence", {}).get("model_family") or "")
+        if model_family.startswith("untrained"):
+            return {"failure_reason": "ml_untrained"}
+        return {}
+
+    def after_precheck(self, state: DecisionState) -> str:
+        return "fail" if state.get("failure_reason") else "market"
+
     def _base_context(self, state: DecisionState) -> dict[str, Any]:
         return {
             "symbol": state["symbol"],
@@ -107,10 +116,8 @@ class TriConsensusGraph:
     def after_consensus(self, state: DecisionState) -> str:
         return (
             "risk"
-            if state.get("consensus_outcome") in {
-                ConsensusOutcome.LONG.value,
-                ConsensusOutcome.SHORT.value,
-            }
+            if state.get("consensus_outcome")
+            in {ConsensusOutcome.LONG.value, ConsensusOutcome.SHORT.value}
             else "no_trade"
         )
 
@@ -124,31 +131,40 @@ class TriConsensusGraph:
         decision = self.risk.evaluate(
             RiskInput(
                 equity=float(account["equity"]),
-                day_start_equity=float(account.get("day_start_equity") or account["equity"]),
+                day_start_equity=float(
+                    account.get("day_start_equity") or account["equity"]
+                ),
                 daily_pnl=float(account.get("daily_pnl", 0)),
                 peak_equity=float(account["peak_equity"]),
                 open_positions=int(account.get("open_positions", 0)),
                 current_exposure=float(account.get("current_exposure", 0)),
                 correlated_exposure=float(account.get("correlated_exposure", 0)),
                 losing_streak=int(account.get("losing_streak", 0)),
-                minutes_since_last_loss=int(account.get("minutes_since_last_loss", 999999)),
+                minutes_since_last_loss=int(
+                    account.get("minutes_since_last_loss", 999999)
+                ),
                 kill_switch_active=bool(account.get("kill_switch_active", False)),
                 entry=entry,
                 stop_loss=float(proposal.stop_loss),
                 take_profit=float(proposal.take_profit_1),
                 spread_bps=float(features.get("spread_bps") or 0),
-                slippage_bps=float(account.get("slippage_bps", 2)),
-                realized_volatility_20=float(features.get("realized_vol_20") or 0),
+                slippage_bps=float(account.get("slippage_bps", 0)),
+                realized_volatility_20=float(
+                    features.get("realized_vol_20") or 0
+                ),
                 market_data_age_ms=int(market["market_data_age_ms"]),
                 side=state["consensus_outcome"],
             )
         )
-        agents = self._agent_payload(state)
         return {
             "result": {
-                "outcome": state["consensus_outcome"] if decision.approved else "NO_TRADE",
+                "outcome": (
+                    state["consensus_outcome"] if decision.approved else "NO_TRADE"
+                ),
+                "consensus_outcome": state["consensus_outcome"],
+                "full_consensus": True,
                 "reason": decision.reason,
-                "agents": agents,
+                "agents": self._agent_payload(state),
                 "risk": asdict(decision),
             }
         }
@@ -157,6 +173,8 @@ class TriConsensusGraph:
         return {
             "result": {
                 "outcome": "NO_TRADE",
+                "consensus_outcome": "NO_TRADE",
+                "full_consensus": False,
                 "reason": state.get("consensus_reason", "consensus_rejected"),
                 "agents": self._agent_payload(state),
                 "risk": None,
@@ -167,6 +185,8 @@ class TriConsensusGraph:
         return {
             "result": {
                 "outcome": "NO_TRADE",
+                "consensus_outcome": "NO_TRADE",
+                "full_consensus": False,
                 "reason": state.get("failure_reason", "unknown_graph_failure"),
                 "agents": self._agent_payload(state),
                 "risk": None,
@@ -186,6 +206,7 @@ class TriConsensusGraph:
 
     def _build(self):
         builder = StateGraph(DecisionState)
+        builder.add_node("precheck", self.precheck_node)
         builder.add_node("market", self.market_node)
         builder.add_node("strategist", self.strategist_node)
         builder.add_node("critic", self.critic_node)
@@ -194,7 +215,12 @@ class TriConsensusGraph:
         builder.add_node("no_trade", self.no_trade_node)
         builder.add_node("fail", self.fail_node)
 
-        builder.add_edge(START, "market")
+        builder.add_edge(START, "precheck")
+        builder.add_conditional_edges(
+            "precheck",
+            self.after_precheck,
+            {"market": "market", "fail": "fail"},
+        )
         builder.add_conditional_edges(
             "market",
             self.after_market,
