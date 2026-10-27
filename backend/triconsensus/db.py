@@ -27,23 +27,29 @@ class SupabaseRepository:
         raw = json.dumps(config, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(raw).hexdigest()
 
+    def get_experiment(self, version: str) -> dict | None:
+        try:
+            rows = (
+                self.client.table("experiments")
+                .select("*")
+                .eq("version", version)
+                .limit(1)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"experiment read failed: {exc}") from exc
+        return rows[0] if rows else None
+
     def ensure_experiment(self, *, version: str, config: dict[str, Any]) -> dict:
-        existing = (
-            self.client.table("experiments")
-            .select("*")
-            .eq("version", version)
-            .limit(1)
-            .execute()
-            .data
-        )
+        existing = self.get_experiment(version)
         digest = self.config_hash(config)
         if existing:
-            row = existing[0]
-            if row["config_hash"] != digest:
+            if existing["config_hash"] != digest:
                 raise PersistenceFailure(
                     f"immutable experiment {version} has a different configuration"
                 )
-            return row
+            return existing
 
         result = (
             self.client.table("experiments")
@@ -86,3 +92,38 @@ class SupabaseRepository:
         if not rows:
             raise PersistenceFailure("paper_trades update returned no row")
         return rows[0]
+
+    def list_trades(
+        self,
+        experiment_id: str,
+        *,
+        status: str | None = None,
+        limit: int = 500,
+    ) -> list[dict]:
+        try:
+            query = (
+                self.client.table("paper_trades")
+                .select("*")
+                .eq("experiment_id", experiment_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+            )
+            if status is not None:
+                query = query.eq("status", status)
+            return query.execute().data or []
+        except Exception as exc:
+            raise PersistenceFailure(f"paper_trades read failed: {exc}") from exc
+
+    def decision_replay(self, consensus_id: str) -> dict | None:
+        try:
+            rows = (
+                self.client.table("decision_replay")
+                .select("*")
+                .eq("consensus_id", consensus_id)
+                .limit(1)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"decision replay read failed: {exc}") from exc
+        return rows[0] if rows else None
