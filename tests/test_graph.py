@@ -127,3 +127,17 @@ async def test_untrained_ml_fails_before_agents():
     result = await graph.decide(**inputs)
     assert result["outcome"] == "NO_TRADE"
     assert result["reason"] == "ml_untrained"
+
+
+@pytest.mark.asyncio
+async def test_risk_rejection_keeps_full_agent_consensus_in_audit():
+    settings, _, inputs = state()
+    inputs["account_state"]["kill_switch_active"] = True
+    graph = TriConsensusGraph(ApprovingAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "NO_TRADE"
+    assert result["consensus_outcome"] == "LONG"
+    assert result["full_consensus"] is True
+    assert result["consensus_reason"] == "Full bullish consensus"
+    assert result["risk"]["approved"] is False
+    assert result["reason"] == "kill_switch_active"
