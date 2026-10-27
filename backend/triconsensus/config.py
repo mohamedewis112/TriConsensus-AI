@@ -22,8 +22,8 @@ class Settings(BaseSettings):
 
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_api_key: SecretStr | None = None
-    model_id: str = "nvidia/nemotron-3-ultra-253b-a12b:free"
-    model_fallbacks: str = ""
+    model_id: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    model_fallbacks: str = "openrouter/free"
 
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
