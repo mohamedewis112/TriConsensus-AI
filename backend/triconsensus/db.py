@@ -15,11 +15,12 @@ class PersistenceFailure(RuntimeError):
 
 class SupabaseRepository:
     def __init__(self, settings: Settings) -> None:
-        if not settings.supabase_url or not settings.supabase_service_role_key:
+        backend_key = settings.supabase_secret_key or settings.supabase_service_role_key
+        if not settings.supabase_url or backend_key is None:
             raise PersistenceFailure("Supabase backend credentials are missing")
         self.client: Client = create_client(
             settings.supabase_url,
-            settings.supabase_service_role_key.get_secret_value(),
+            backend_key.get_secret_value(),
         )
 
     @staticmethod
