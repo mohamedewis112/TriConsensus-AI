@@ -73,7 +73,7 @@ async def paper_cycle(symbol: str, account: AccountState) -> dict:
         raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
 
 
-@app.get("/v1/analytics/summary", dependencies=[Depends(require_control_key)])
+@app.post("/v1/paper-monitor", dependencies=[Depends(require_control_key)])\nasync def paper_monitor(version: str = "V1") -> dict:\n    try:\n        return await PaperTradeMonitor(settings).run(version=version)\n    except PersistenceFailure as exc:\n        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc\n\n\n@app.get("/v1/analytics/summary", dependencies=[Depends(require_control_key)])
 async def analytics_summary(version: str = "V1") -> dict:
     try:
         repo = SupabaseRepository(settings)
