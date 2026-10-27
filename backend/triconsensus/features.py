@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+
+import numpy as np
 import pandas as pd
 
 
@@ -13,7 +15,7 @@ def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
     losses = -delta.clip(upper=0)
     avg_gain = gains.ewm(alpha=1 / period, adjust=False).mean()
     avg_loss = losses.ewm(alpha=1 / period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, pd.NA)
+    rs = avg_gain / avg_loss.replace(0, np.nan)
     return 100 - (100 / (1 + rs))
 
 
@@ -33,12 +35,13 @@ def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
 def _adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     up_move = df["high"].diff()
     down_move = -df["low"].diff()
-    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
-    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
-    atr = _atr(df, period)
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0).astype(float)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0).astype(float)
+    atr = _atr(df, period).replace(0, np.nan)
     plus_di = 100 * plus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
     minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, pd.NA)
+    denominator = (plus_di + minus_di).replace(0, np.nan)
+    dx = (100 * (plus_di - minus_di).abs() / denominator).astype(float)
     return dx.ewm(alpha=1 / period, adjust=False).mean()
 
 
@@ -56,6 +59,11 @@ def build_features(
         raise ValueError("at least 60 candles are required")
 
     x = df.copy()
+    for column in REQUIRED_COLUMNS:
+        x[column] = pd.to_numeric(x[column], errors="coerce").astype(float)
+    if x[list(REQUIRED_COLUMNS)].iloc[-60:].isna().any().any():
+        raise ValueError("recent OHLCV data contains non-numeric or missing values")
+
     x["ret_1"] = x["close"].pct_change()
     x["ema_12"] = x["close"].ewm(span=12, adjust=False).mean()
     x["ema_20"] = x["close"].ewm(span=20, adjust=False).mean()
@@ -73,12 +81,12 @@ def build_features(
     x["macd_hist"] = x["macd"] - x["macd_signal"]
 
     typical = (x["high"] + x["low"] + x["close"]) / 3
-    cumulative_volume = x["volume"].cumsum().replace(0, pd.NA)
+    cumulative_volume = x["volume"].cumsum().replace(0, np.nan)
     x["vwap"] = (typical * x["volume"]).cumsum() / cumulative_volume
 
     lowest_14 = x["low"].rolling(14).min()
     highest_14 = x["high"].rolling(14).max()
-    range_14 = (highest_14 - lowest_14).replace(0, pd.NA)
+    range_14 = (highest_14 - lowest_14).replace(0, np.nan)
     x["stoch_k"] = 100 * (x["close"] - lowest_14) / range_14
     x["stoch_d"] = x["stoch_k"].rolling(3).mean()
 
@@ -88,13 +96,38 @@ def build_features(
     x["bb_lower"] = bb_mid - 2 * bb_std
     x["volume_z_20"] = (
         (x["volume"] - x["volume"].rolling(20).mean())
-        / x["volume"].rolling(20).std().replace(0, pd.NA)
+        / x["volume"].rolling(20).std().replace(0, np.nan)
     )
     x["support_20"] = x["low"].rolling(20).min().shift(1)
     x["resistance_20"] = x["high"].rolling(20).max().shift(1)
-    x["atr_normalized_move"] = x["close"].diff() / x["atr_14"].replace(0, pd.NA)
+    x["atr_normalized_move"] = x["close"].diff() / x["atr_14"].replace(0, np.nan)
 
     last = x.iloc[-1]
+    critical = [
+        "ema_20",
+        "ema_50",
+        "sma_20",
+        "rsi_14",
+        "atr_14",
+        "adx_14",
+        "macd",
+        "macd_signal",
+        "macd_hist",
+        "vwap",
+        "stoch_k",
+        "stoch_d",
+        "roc_10",
+        "realized_vol_20",
+        "bb_upper",
+        "bb_lower",
+        "volume_z_20",
+        "support_20",
+        "resistance_20",
+        "atr_normalized_move",
+    ]
+    if any(pd.isna(last[name]) or not np.isfinite(float(last[name])) for name in critical):
+        raise ValueError("feature calculation produced non-finite values")
+
     spread_bps = None
     if orderbook is not None:
         spread_bps = float(orderbook.get("spread_bps", 0))
