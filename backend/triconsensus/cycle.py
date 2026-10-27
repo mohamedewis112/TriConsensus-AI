@@ -47,7 +47,7 @@ class PaperDecisionCycle:
             "market": "USDT_PERPETUAL",
             "primary_timeframe": "15m",
             "context_timeframes": ["1m", "5m", "15m", "1h", "4h"],
-            "risk_per_trade": self.settings.risk_per_trade,
+            "paper_slippage_bps": self.settings.paper_slippage_bps,\n            "risk_per_trade": self.settings.risk_per_trade,
             "max_daily_loss": self.settings.max_daily_loss,
             "max_drawdown": self.settings.max_drawdown,
             "max_concurrent_trades": self.settings.max_concurrent_trades,
@@ -262,7 +262,7 @@ class PaperDecisionCycle:
                 "position_size": risk["position_size"],
                 "max_exposure_after": risk["projected_exposure"],
                 "spread_bps": primary.get("spread_bps"),
-                "slippage_bps": account_state.get("slippage_bps", 2),
+                "slippage_bps": account_state.get("slippage_bps", self.settings.paper_slippage_bps),
             },
         )
 
@@ -270,7 +270,7 @@ class PaperDecisionCycle:
             side=result["outcome"],
             requested_price=entry,
             quantity=risk["position_size"],
-            slippage_bps=float(account_state.get("slippage_bps", 2)),
+            slippage_bps=float(account_state.get("slippage_bps", self.settings.paper_slippage_bps)),
         )
         trade = self.repo.insert(
             "paper_trades",
