@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
+    control_api_key: SecretStr | None = None
 
     paper_starting_balance: float = 10_000.0
     risk_per_trade: float = Field(default=0.0025, gt=0, le=0.01)
