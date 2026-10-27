@@ -55,6 +55,11 @@ class VetoAgents(ApprovingAgents):
         )
 
 
+class ShouldNotRunAgents:
+    async def market_intelligence(self, context):
+        raise AssertionError("agents must not run while ML is untrained")
+
+
 def state():
     settings = Settings()
     levels = build_trade_levels(
@@ -69,7 +74,10 @@ def state():
             "spread_bps": 1,
             "realized_vol_20": 0.02,
         },
-        "ml_evidence": {"probability_positive": 0.6},
+        "ml_evidence": {
+            "probability_positive": 0.6,
+            "model_family": "lightgbm",
+        },
         "account_state": {
             "equity": 10000,
             "day_start_equity": 10000,
@@ -93,6 +101,8 @@ async def test_langgraph_full_consensus_reaches_risk_engine():
     graph = TriConsensusGraph(ApprovingAgents(), DeterministicRiskEngine(settings))
     result = await graph.decide(**inputs)
     assert result["outcome"] == "LONG"
+    assert result["consensus_outcome"] == "LONG"
+    assert result["full_consensus"] is True
     assert result["risk"]["approved"] is True
 
 
@@ -102,4 +112,18 @@ async def test_langgraph_veto_routes_to_no_trade():
     graph = TriConsensusGraph(VetoAgents(), DeterministicRiskEngine(settings))
     result = await graph.decide(**inputs)
     assert result["outcome"] == "NO_TRADE"
+    assert result["consensus_outcome"] == "NO_TRADE"
     assert result["risk"] is None
+
+
+@pytest.mark.asyncio
+async def test_untrained_ml_fails_before_agents():
+    settings, _, inputs = state()
+    inputs["ml_evidence"] = {
+        "probability_positive": 0.5,
+        "model_family": "untrained_neutral_baseline",
+    }
+    graph = TriConsensusGraph(ShouldNotRunAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "NO_TRADE"
+    assert result["reason"] == "ml_untrained"
