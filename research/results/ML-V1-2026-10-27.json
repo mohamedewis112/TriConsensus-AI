@@ -1,0 +1,32 @@
+{
+  "experiment": "ML-V1-2026-10-27",
+  "status": "rejected",
+  "data_source": "bybit_public_archive",
+  "timeframe": "15m",
+  "history_days": 14,
+  "horizon_candles": 4,
+  "positive_return_threshold": 0.0015,
+  "note": "Rejected because no candidate beat the naive probability baseline on mean Brier score. Do not activate these artifacts for trading evidence.",
+  "BTCUSDT": {
+    "dataset_rows": 1261,
+    "positive_rate": 0.2616970658207772,
+    "selected_model_family": "catboost",
+    "selected_mean_accuracy": 0.6844444444444444,
+    "baseline_mean_accuracy": 0.7288888888888888,
+    "selected_mean_brier_score": 0.22210445653157007,
+    "brier_improvement_vs_baseline": -0.11858652608793911,
+    "brier_wins_vs_baseline": 0,
+    "evidence_gate_passed": false
+  },
+  "ETHUSDT": {
+    "dataset_rows": 1261,
+    "positive_rate": 0.33068992862807295,
+    "selected_model_family": "catboost",
+    "selected_mean_accuracy": 0.6577777777777778,
+    "baseline_mean_accuracy": 0.6755555555555556,
+    "selected_mean_brier_score": 0.2416084873794618,
+    "brier_improvement_vs_baseline": -0.09757431372577284,
+    "brier_wins_vs_baseline": 1,
+    "evidence_gate_passed": false
+  }
+}
