@@ -22,7 +22,7 @@ from .regimes import (
     summarize_regime,
 )
 from .setups import SETUP_VERSION, generate_setups
-from .training_v3 import trade_path_label
+from .training_v3 import trade_path_outcome
 
 
 def build_setup_observations(
@@ -73,7 +73,7 @@ def build_setup_observations(
 
         for signal in generate_setups(features):
             side = 1 if signal.side == "LONG" else -1
-            _, net_return = trade_path_label(
+            outcome = trade_path_outcome(
                 candles,
                 index=candle_index,
                 side=side,
@@ -84,17 +84,71 @@ def build_setup_observations(
             observations.append(
                 {
                     "timestamp_ms": int(candles[candle_index]["start_ms"]),
+                    "entry_index": candle_index,
+                    "exit_index": outcome.exit_index,
+                    "exit_reason": outcome.exit_reason,
                     "setup": signal.name,
                     "side": signal.side,
                     "regime": regime.key,
                     "trend": regime.trend,
                     "volatility": regime.volatility,
                     "momentum": regime.momentum,
-                    "net_return": float(net_return),
+                    "gross_return": float(outcome.gross_return),
+                    "net_return": float(outcome.net_return),
+                    "round_trip_cost": float(round_trip_cost),
                 }
             )
 
     return asdict(thresholds), observations
+
+
+def select_non_overlapping(rows: list[dict]) -> list[dict]:
+    ordered = sorted(
+        rows,
+        key=lambda row: (
+            int(row["entry_index"]),
+            int(row["timestamp_ms"]),
+        ),
+    )
+    selected: list[dict] = []
+    busy_until = -1
+    for row in ordered:
+        entry_index = int(row["entry_index"])
+        exit_index = int(row["exit_index"])
+        if exit_index < entry_index:
+            raise ValueError("exit index cannot precede entry index")
+        if entry_index <= busy_until:
+            continue
+        selected.append(row)
+        busy_until = exit_index
+    return selected
+
+
+def execution_diagnostics(rows: list[dict]) -> dict:
+    if not rows:
+        return {
+            "mean_gross_return": 0.0,
+            "break_even_round_trip_cost_bps": 0.0,
+            "assumed_round_trip_cost_bps": 0.0,
+            "cost_margin_bps": 0.0,
+            "cost_sensitivity": {},
+        }
+
+    mean_gross = sum(float(row["gross_return"]) for row in rows) / len(rows)
+    assumed_cost = sum(float(row["round_trip_cost"]) for row in rows) / len(rows)
+    break_even_bps = mean_gross * 10_000
+    assumed_bps = assumed_cost * 10_000
+    sensitivity = {
+        str(bps): mean_gross - (bps / 10_000)
+        for bps in (5, 8, 10, 12, 15)
+    }
+    return {
+        "mean_gross_return": float(mean_gross),
+        "break_even_round_trip_cost_bps": float(break_even_bps),
+        "assumed_round_trip_cost_bps": float(assumed_bps),
+        "cost_margin_bps": float(break_even_bps - assumed_bps),
+        "cost_sensitivity": sensitivity,
+    }
 
 
 def _group_summary(
@@ -109,21 +163,25 @@ def _group_summary(
 
     summaries: list[dict] = []
     for (key, side), rows in sorted(groups.items()):
-        values = [float(row["net_return"]) for row in rows]
+        executable = select_non_overlapping(rows)
+        values = [float(row["net_return"]) for row in executable]
         fold_ids = [
             fold_by_timestamp[int(row["timestamp_ms"])]
-            for row in rows
+            for row in executable
         ]
-        summaries.append(
-            asdict(
-                summarize_regime(
-                    key,
-                    side,
-                    values,
-                    fold_ids,
-                )
+        summary = asdict(
+            summarize_regime(
+                key,
+                side,
+                values,
+                fold_ids,
             )
         )
+        summary.update(execution_diagnostics(executable))
+        summary["candidate_signals"] = len(rows)
+        summary["overlap_filtered"] = len(rows) - len(executable)
+        summary["non_overlapping"] = True
+        summaries.append(summary)
     return sorted(
         summaries,
         key=lambda row: (
@@ -229,6 +287,8 @@ async def run_setup_research(
         "data_quality_gate": quality_gate,
         "gap_safe_windows_only": True,
         "round_trip_cost": 0.0015,
+        "execution_model": "single_open_trade_non_overlapping",
+        "cost_sensitivity_is_diagnostic_only": True,
         "barrier_horizon": 12,
         "stop_atr": 1.5,
         "risk_reward": 1.5,
