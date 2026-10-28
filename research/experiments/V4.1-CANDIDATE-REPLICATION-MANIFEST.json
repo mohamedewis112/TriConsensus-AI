@@ -1,0 +1,68 @@
+{
+  "experiment": "V4.1-CANDIDATE-REPLICATION",
+  "preregistered_before_replication": true,
+  "setup_version": "v4.1-frozen-quant-setups",
+  "discovery_source": "research/results/V4.1-SETUP-REGIME-2026-10-28.json",
+  "replication_window": {
+    "days": 90,
+    "start_date": "2026-05-14",
+    "end_date": "2026-08-11",
+    "source": "Bybit V5 /v5/market/kline",
+    "timeframe": "15m"
+  },
+  "frozen_execution_assumptions": {
+    "round_trip_cost": 0.0015,
+    "stop_atr": 1.5,
+    "risk_reward": 1.5,
+    "horizon_candles": 12,
+    "setup_cooldown_candles": 12
+  },
+  "interpretation": {
+    "activation_rule": "No candidate may activate trading unless it independently satisfies the existing full evidence gate; directional replication alone is research evidence only.",
+    "directional_replication_rule": {
+      "minimum_replication_trades": 10,
+      "mean_net_return_must_be_positive": true,
+      "profit_factor_minimum": 1.1,
+      "minimum_fold_coverage": 3,
+      "minimum_profitable_fold_fraction": 0.67
+    }
+  },
+  "candidates": [
+    {
+      "symbol": "BTCUSDT",
+      "setup": "trend_pullback",
+      "regime": "trend_down|mid_vol|momentum_down",
+      "side": "SHORT"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "setup": "trend_continuation",
+      "regime": "range|high_vol|momentum_down",
+      "side": "SHORT"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "setup": "breakout",
+      "regime": "range|high_vol|momentum_down",
+      "side": "SHORT"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "breakout",
+      "regime": "trend_up|high_vol|momentum_down",
+      "side": "SHORT"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "breakout",
+      "regime": "trend_down|high_vol|momentum_up",
+      "side": "LONG"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "trend_pullback",
+      "regime": "range|low_vol|momentum_up",
+      "side": "SHORT"
+    }
+  ]
+}
