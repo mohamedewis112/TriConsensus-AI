@@ -1,10 +1,7 @@
 name: V4.1 Modern Archive Replication
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v41-modern-archive.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
