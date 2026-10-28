@@ -22,10 +22,14 @@ class Settings(BaseSettings):
     bybit_ws_url: str = "wss://stream.bybit.com/v5/public/linear"
     binance_ws_url: str = "wss://fstream.binance.com/public/ws"
 
+    llm_provider: str = "openrouter"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_api_key: SecretStr | None = None
     model_id: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     model_fallbacks: str = "openrouter/free"
+    vercel_ai_gateway_base_url: str = "https://ai-gateway.vercel.sh/v1"
+    vercel_ai_gateway_model: str = "nvidia/nemotron-3.5-lightning-free"
+    vercel_oidc_token: SecretStr | None = None
 
     supabase_url: str | None = None
     supabase_secret_key: SecretStr | None = None
