@@ -1,0 +1,54 @@
+name: V5.1 Live Evidence Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v51-live-evidence-probe.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install probe dependencies
+        run: pip install "httpx>=0.28,<1"
+      - name: Probe live V5.1 evidence source
+        env:
+          PYTHONPATH: backend
+          SYMBOL: "${{ matrix.symbol }}"
+        run: |
+          python - <<'PY'
+          import asyncio
+          import json
+          import os
+          import time
+
+          from triconsensus.binance_live import BinanceGlobalRatioClient
+
+          async def main():
+              symbol = os.environ["SYMBOL"]
+              points = await BinanceGlobalRatioClient().recent_15m(symbol)
+              latest = points[-1]
+              print(json.dumps({
+                  "symbol": symbol,
+                  "aggregated_points": len(points),
+                  "latest_context_timestamp_ms": latest.timestamp_ms,
+                  "latest_context_age_ms": int(time.time() * 1000) - latest.timestamp_ms,
+                  "source": "Binance USD-M globalLongShortAccountRatio 5m -> 15m",
+                  "paper_only": True,
+              }, sort_keys=True))
+
+          asyncio.run(main())
+          PY
