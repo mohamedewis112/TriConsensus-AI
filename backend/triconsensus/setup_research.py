@@ -234,6 +234,8 @@ async def run_setup_research(
         "risk_reward": 1.5,
         "volatility_thresholds": thresholds,
         "generated_at": datetime.now(UTC).isoformat(),
+        "default_action": "NO_TRADE",
+        "ranked": analysis["setup_regime"],
         **analysis,
     }
 
