@@ -32,7 +32,10 @@ create index if not exists agent_orchestration_attempts_experiment_id_idx
   on public.agent_orchestration_attempts(experiment_id);
 
 create or replace function public.reject_agent_orchestration_attempt_mutation()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+set search_path = public
+as $
 begin
   raise exception 'agent_orchestration_attempts is append-only';
 end;
@@ -275,7 +278,8 @@ end;
 $$;
 
 revoke all on function public.triconsensus_live_snapshot(text,integer) from public;
-grant execute on function public.triconsensus_live_snapshot(text,integer) to anon, authenticated, service_role;
+grant execute on function public.triconsensus_live_snapshot(text,integer) to anon, service_role;
+revoke execute on function public.triconsensus_dashboard_snapshot(text) from authenticated;
 
 create or replace function public.triconsensus_orchestration_status(p_token text)
 returns jsonb
@@ -313,4 +317,4 @@ end;
 $$;
 
 revoke all on function public.triconsensus_orchestration_status(text) from public;
-grant execute on function public.triconsensus_orchestration_status(text) to anon, authenticated, service_role;
+grant execute on function public.triconsensus_orchestration_status(text) to anon, service_role;
