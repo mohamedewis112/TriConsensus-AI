@@ -2,6 +2,10 @@ name: V5 Cross Venue Evidence
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "research-trigger/v5-cross-venue-lagged.txt"
 
 permissions:
   contents: read
