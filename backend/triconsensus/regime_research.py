@@ -8,10 +8,13 @@ from datetime import UTC, date, datetime
 import json
 from pathlib import Path
 
+import math
+
+import numpy as np
 import pandas as pd
 
 from .archive_data import BybitPublicArchiveClient
-from .features import build_features
+from .features import _adx, _atr, _rsi
 from .regimes import (
     classify_regime,
     chronological_fold_ids,
@@ -21,8 +24,54 @@ from .regimes import (
 from .training_v3 import trade_path_label
 
 
-def _frame(candles: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame(candles)[["open", "high", "low", "close", "volume"]]
+def build_regime_feature_frame(candles: list[dict]) -> pd.DataFrame:
+    frame = pd.DataFrame(candles).copy()
+    for column in ("open", "high", "low", "close", "volume"):
+        frame[column] = pd.to_numeric(frame[column], errors="coerce").astype(float)
+    frame["start_ms"] = pd.to_numeric(frame["start_ms"], errors="raise").astype("int64")
+
+    frame["ret_1"] = frame["close"].pct_change()
+    frame["ema_12"] = frame["close"].ewm(span=12, adjust=False).mean()
+    frame["ema_20"] = frame["close"].ewm(span=20, adjust=False).mean()
+    frame["ema_26"] = frame["close"].ewm(span=26, adjust=False).mean()
+    frame["ema_50"] = frame["close"].ewm(span=50, adjust=False).mean()
+    frame["rsi_14"] = _rsi(frame["close"], 14)
+    frame["atr_14"] = _atr(frame, 14)
+    frame["adx_14"] = _adx(frame, 14)
+    frame["roc_10"] = frame["close"].pct_change(10)
+    frame["realized_vol_20"] = frame["ret_1"].rolling(20).std() * math.sqrt(20)
+    frame["macd"] = frame["ema_12"] - frame["ema_26"]
+    frame["macd_signal"] = frame["macd"].ewm(span=9, adjust=False).mean()
+    frame["macd_hist"] = frame["macd"] - frame["macd_signal"]
+    typical = (frame["high"] + frame["low"] + frame["close"]) / 3
+    cumulative_volume = frame["volume"].cumsum().replace(0, np.nan)
+    frame["vwap"] = (typical * frame["volume"]).cumsum() / cumulative_volume
+    frame["support_20"] = frame["low"].rolling(20).min().shift(1)
+    frame["resistance_20"] = frame["high"].rolling(20).max().shift(1)
+    frame["volume_z_20"] = (
+        (frame["volume"] - frame["volume"].rolling(20).mean())
+        / frame["volume"].rolling(20).std().replace(0, np.nan)
+    )
+    frame["atr_normalized_move"] = (
+        frame["close"].diff() / frame["atr_14"].replace(0, np.nan)
+    )
+    return frame
+
+
+def _feature_dict(row: pd.Series) -> dict:
+    required = {
+        "close": row["close"],
+        "ema_20": row["ema_20"],
+        "ema_50": row["ema_50"],
+        "atr_14": row["atr_14"],
+        "adx_14": row["adx_14"],
+        "realized_vol_20": row["realized_vol_20"],
+        "macd_hist": row["macd_hist"],
+        "roc_10": row["roc_10"],
+    }
+    if not all(np.isfinite(float(value)) for value in required.values()):
+        raise ValueError("non-finite regime feature row")
+    return {key: float(value) for key, value in required.items()}
 
 
 def build_regime_observations(
@@ -39,24 +88,28 @@ def build_regime_observations(
     if len(candles) < lookback + horizon + calibration_rows:
         raise ValueError("not enough candles for regime research")
 
-    feature_rows: list[tuple[int, dict]] = []
-    for i in range(lookback - 1, len(candles) - horizon):
-        window = candles[i - lookback + 1 : i + 1]
-        feature_rows.append((i, build_features(_frame(window))))
+    frame = build_regime_feature_frame(candles)
+    usable_start = max(lookback - 1, 60)
+    usable_end = len(candles) - horizon
+    indices = [
+        i
+        for i in range(usable_start, usable_end)
+        if np.isfinite(float(frame.iloc[i]["realized_vol_20"]))
+    ]
+    if len(indices) < calibration_rows + 100:
+        raise ValueError("not enough finite regime feature rows")
 
+    calibration_indices = indices[:calibration_rows]
     calibration = [
-        float(features["realized_vol_20"])
-        for _, features in feature_rows[:calibration_rows]
+        float(frame.iloc[i]["realized_vol_20"])
+        for i in calibration_indices
     ]
     thresholds = fit_regime_thresholds(calibration)
 
     observations: list[dict] = []
-    for row_index, (candle_index, features) in enumerate(feature_rows):
-        if row_index < calibration_rows:
-            continue
-        if (row_index - calibration_rows) % stride != 0:
-            continue
-
+    evaluation_indices = indices[calibration_rows::stride]
+    for candle_index in evaluation_indices:
+        features = _feature_dict(frame.iloc[candle_index])
         regime = classify_regime(features, thresholds)
         for side_name, side in (("LONG", 1), ("SHORT", -1)):
             _, net_return = trade_path_label(
