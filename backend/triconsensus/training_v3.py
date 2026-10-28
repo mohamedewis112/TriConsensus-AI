@@ -86,7 +86,16 @@ def deterministic_candidate(features: dict) -> int:
     return 0
 
 
-def trade_path_label(
+@dataclass(frozen=True)
+class TradePathOutcome:
+    label: int
+    gross_return: float
+    net_return: float
+    exit_index: int
+    exit_reason: str
+
+
+def trade_path_outcome(
     candles: list[dict],
     *,
     index: int,
@@ -96,11 +105,13 @@ def trade_path_label(
     min_rr: float = 1.5,
     stop_atr: float = 1.5,
     round_trip_cost: float = 0.0015,
-) -> tuple[int, float]:
+) -> TradePathOutcome:
     if side not in {-1, 1}:
         raise ValueError("side must be -1 or +1")
     if atr <= 0 or horizon <= 0:
         raise ValueError("invalid ATR/horizon")
+    if index < 0 or index + horizon >= len(candles):
+        raise ValueError("trade path exceeds available candles")
 
     entry = float(candles[index]["close"])
     stop_distance = atr * stop_atr
@@ -113,7 +124,8 @@ def trade_path_label(
         stop = entry + stop_distance
         target = entry - target_distance
 
-    for future in candles[index + 1 : index + horizon + 1]:
+    for future_index in range(index + 1, index + horizon + 1):
+        future = candles[future_index]
         high = float(future["high"])
         low = float(future["low"])
         if side == 1:
@@ -127,15 +139,60 @@ def trade_path_label(
         # unknown. Score it conservatively as the stop being hit first.
         if hit_stop:
             gross = -(stop_distance / entry)
-            return 0, gross - round_trip_cost
+            net = gross - round_trip_cost
+            return TradePathOutcome(
+                label=0,
+                gross_return=gross,
+                net_return=net,
+                exit_index=future_index,
+                exit_reason="STOP",
+            )
         if hit_target:
             gross = target_distance / entry
-            return 1, gross - round_trip_cost
+            net = gross - round_trip_cost
+            return TradePathOutcome(
+                label=int(net > 0),
+                gross_return=gross,
+                net_return=net,
+                exit_index=future_index,
+                exit_reason="TARGET",
+            )
 
-    exit_price = float(candles[index + horizon]["close"])
+    exit_index = index + horizon
+    exit_price = float(candles[exit_index]["close"])
     gross = side * ((exit_price / entry) - 1.0)
     net = gross - round_trip_cost
-    return int(net > 0), net
+    return TradePathOutcome(
+        label=int(net > 0),
+        gross_return=gross,
+        net_return=net,
+        exit_index=exit_index,
+        exit_reason="TIME",
+    )
+
+
+def trade_path_label(
+    candles: list[dict],
+    *,
+    index: int,
+    side: int,
+    atr: float,
+    horizon: int,
+    min_rr: float = 1.5,
+    stop_atr: float = 1.5,
+    round_trip_cost: float = 0.0015,
+) -> tuple[int, float]:
+    outcome = trade_path_outcome(
+        candles,
+        index=index,
+        side=side,
+        atr=atr,
+        horizon=horizon,
+        min_rr=min_rr,
+        stop_atr=stop_atr,
+        round_trip_cost=round_trip_cost,
+    )
+    return outcome.label, outcome.net_return
 
 
 def v3_vector(window: list[dict], features: dict, side: int) -> dict[str, float]:
