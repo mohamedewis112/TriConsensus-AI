@@ -75,7 +75,7 @@ td a { color: var(--cyan); }
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; padding: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand { margin-bottom: 12px; }
-  nav { grid-template-columns: repeat(5, auto); overflow-x: auto; }
+  nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
   .navItem { white-space: nowrap; }
   .safetyBadge { display: none; }
   .page { padding: 24px 16px 50px; }
