@@ -1,10 +1,7 @@
 name: V5.1 Untouched Directional Rule Gate
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v51-untouched-rule.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
