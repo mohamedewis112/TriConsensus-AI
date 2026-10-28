@@ -248,8 +248,34 @@ async def run_regime_research(
         **analysis,
     }
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "regime-report.json").write_text(
+    report_path = output_dir / "regime-report.json"
+    report_path.write_text(
         json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    policy = {
+        "schema_version": 1,
+        "symbol": symbol,
+        "source_report": "regime-report.json",
+        "generated_at": report["generated_at"],
+        "default_action": "NO_TRADE",
+        "qualified_pairs": [
+            {
+                "regime": row["regime"],
+                "side": row["side"],
+                "trades": row["trades"],
+                "mean_net_return": row["mean_net_return"],
+                "profit_factor": row["profit_factor"],
+                "bootstrap_lcb_95": row["bootstrap_lcb_95"],
+                "profitable_folds": row["profitable_folds"],
+                "folds": row["folds"],
+            }
+            for row in report["qualified"]
+        ],
+    }
+    (output_dir / "qualified-policy.json").write_text(
+        json.dumps(policy, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     return report
