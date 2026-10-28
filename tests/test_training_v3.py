@@ -11,7 +11,7 @@ from triconsensus.training_v3 import (
 )
 
 
-def synthetic_candles(n=850):
+def synthetic_candles(n=1000):
     rows = []
     for i in range(n):
         base = 100 + i * 0.025 + math.sin(i / 8) * 1.2
