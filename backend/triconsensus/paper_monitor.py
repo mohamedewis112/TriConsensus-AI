@@ -19,7 +19,13 @@ class ExitSignal:
     reason: str | None = None
 
 
-def evaluate_exit(trade: dict, last_price: float) -> ExitSignal:
+def evaluate_exit(
+    trade: dict,
+    last_price: float,
+    *,
+    mfe: float | None = None,
+    trailing_lock_fraction: float = 0.0,
+) -> ExitSignal:
     side = str(trade["side"])
     stop = float(trade["stop_loss"])
     tp1 = float(trade["take_profit_1"])
@@ -36,6 +42,19 @@ def evaluate_exit(trade: dict, last_price: float) -> ExitSignal:
             return ExitSignal(True, "TAKE_PROFIT_1")
     else:
         return ExitSignal(True, "INVALID_SIDE")
+
+    if trailing_lock_fraction > 0 and mfe is not None and mfe > 0:
+        entry = float(trade["actual_entry"])
+        quantity = float(trade["position_size"])
+        initial_risk = abs(entry - stop) * quantity
+        current_profit = current_excursion(trade, last_price)
+        if (
+            initial_risk > 0
+            and mfe >= initial_risk
+            and current_profit <= (mfe * trailing_lock_fraction)
+        ):
+            return ExitSignal(True, "TRAILING_PROFIT")
+
     return ExitSignal(False)
 
 
@@ -117,7 +136,46 @@ class PaperTradeMonitor:
 
             last_price = float(ticker["last_price"])
             mae, mfe = update_excursions(trade, last_price)
-            signal = evaluate_exit(trade, last_price)
+
+            open_payload: dict = {}
+            trailing_lock_fraction = 0.0
+            if version.startswith("V6"):
+                try:
+                    open_events = [
+                        event
+                        for event in self.repo.trade_events_for_trade(trade["id"])
+                        if event.get("event_type") == "PAPER_OPEN"
+                    ]
+                    open_payload = (
+                        (open_events[0].get("payload") or {}) if open_events else {}
+                    )
+                except PersistenceFailure:
+                    open_payload = {}
+                dynamic_action = (
+                    (open_payload.get("v6_adaptive") or {}).get("dynamic_risk") or {}
+                )
+                if not bool(dynamic_action.get("shadow_mode", True)):
+                    trailing_lock_fraction = max(
+                        0.0,
+                        min(
+                            0.90,
+                            float(dynamic_action.get("trailing_lock_fraction") or 0),
+                        ),
+                    )
+
+            elapsed_seconds = duration_seconds(str(trade["opened_at"]), datetime.now(UTC))
+            if (
+                version.startswith("V6")
+                and elapsed_seconds >= self.settings.v6_trade_horizon_minutes * 60
+            ):
+                signal = ExitSignal(True, "HORIZON_LIMIT")
+            else:
+                signal = evaluate_exit(
+                    trade,
+                    last_price,
+                    mfe=mfe,
+                    trailing_lock_fraction=trailing_lock_fraction,
+                )
 
             if not signal.triggered:
                 self.repo.update_trade(trade["id"], {"mae": mae, "mfe": mfe})
@@ -200,14 +258,15 @@ class PaperTradeMonitor:
 
             if version.startswith("V6"):
                 try:
-                    open_events = [
-                        event
-                        for event in self.repo.trade_events_for_trade(trade["id"])
-                        if event.get("event_type") == "PAPER_OPEN"
-                    ]
-                    open_payload = (
-                        (open_events[0].get("payload") or {}) if open_events else {}
-                    )
+                    if not open_payload:
+                        open_events = [
+                            event
+                            for event in self.repo.trade_events_for_trade(trade["id"])
+                            if event.get("event_type") == "PAPER_OPEN"
+                        ]
+                        open_payload = (
+                            (open_events[0].get("payload") or {}) if open_events else {}
+                        )
                     adaptive = open_payload.get("v6_adaptive") or {}
                     if adaptive:
                         notional = max(float(trade.get("notional_value") or 0), 1e-12)
