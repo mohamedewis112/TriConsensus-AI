@@ -144,6 +144,10 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
   const eth = data?.latest_signals?.find((s) => s.symbol === "ETH/USDT");
   const btc = data?.latest_signals?.find((s) => s.symbol === "BTC/USDT");
   const candidate = [btc, eth].find((s) => s && s.signal !== "NO_TRADE");
+  const alerts = (data?.events ?? []).filter((event) => {
+    const state = String(event.state ?? "").toUpperCase();
+    return ["BLOCKED", "FAILED", "VETO", "UNHEALTHY", "LOSS"].includes(state);
+  }).slice(0, 8);
 
   return (
     <div className="page">
@@ -265,6 +269,21 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
                   <small>{Number(signal!.feature_value).toFixed(5)}</small>
                 </div>
               ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <span className="label">ALERT CENTER</span>
+            <div className="agentStateList">
+              {alerts.length ? alerts.map((event, index) => (
+                <div key={event.event_time + "-" + index}>
+                  <span>{event.kind} · {event.subject}</span>
+                  <strong className="stateBad">{event.state}</strong>
+                  <small>{event.title}</small>
+                </div>
+              )) : (
+                <div><span>No critical alerts</span><strong className="stateGood">CLEAR</strong><small>Only material failures, vetoes, blocks and losses appear here.</small></div>
+              )}
             </div>
           </article>
 
