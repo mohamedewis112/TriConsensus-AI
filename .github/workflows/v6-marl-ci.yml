@@ -1,0 +1,40 @@
+name: V6 MARL CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/**"]
+    paths:
+      - "backend/triconsensus/v6_*.py"
+      - "backend/requirements-marl.txt"
+      - "tests/test_v6_*.py"
+      - ".github/workflows/v6-marl-ci.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "backend/triconsensus/v6_*.py"
+      - "backend/requirements-marl.txt"
+      - "tests/test_v6_*.py"
+      - ".github/workflows/v6-marl-ci.yml"
+
+jobs:
+  mappo-cpu-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install core and V6 MARL dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-marl.txt "pytest>=8.3,<9" "pytest-asyncio>=0.25,<2"
+
+      - name: Run V6 adaptive and MAPPO tests
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest -q tests/test_v6_marl.py tests/test_v6_graph.py tests/test_v6_paper_monitor.py tests/test_v6_policy_worker.py tests/test_v6_mappo_torch.py
