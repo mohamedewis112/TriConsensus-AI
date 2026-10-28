@@ -152,6 +152,135 @@ class PaperTradeMonitor:
         self.market = BybitPublicClient(settings)
         self.execution = PaperExecutionEngine()
 
+        self.v6_policy = MAPPOPolicyBundle(
+            portfolio_input_dim=15,
+            risk_input_dim=8,
+            global_state_dim=23,
+        )
+        try:
+            policy_row = self.repo.latest_marl_policy("mappo_shared")
+            if policy_row and policy_row.get("weights"):
+                self.v6_policy.load_payload(
+                    policy_row["weights"],
+                    policy_version=str(policy_row["version"]),
+                )
+        except (PersistenceFailure, MARLDependencyError, ValueError, KeyError):
+            pass
+
+        self.v6_risk_agent = DynamicVolatilityRiskAgent(
+            self.v6_policy,
+            shadow_mode=settings.v6_marl_shadow_mode,
+            max_microstructure_age_ms=settings.v6_max_microstructure_age_ms,
+            adverse_imbalance=settings.v6_adverse_orderbook_imbalance,
+        )
+
+    async def _fresh_v6_risk_overlay(
+        self,
+        *,
+        trade: dict,
+        bybit_symbol: str,
+        display_symbol: str,
+        ticker: dict,
+    ) -> tuple[dict, DynamicRiskAction, VolatilityRiskState] | None:
+        observed_at = datetime.now(UTC)
+        try:
+            candles = await self.market.klines(
+                bybit_symbol,
+                "15m",
+                limit=60,
+                drop_open_candle=True,
+            )
+            features = build_features(_frame(candles))
+        except (MarketDataFailure, ValueError, KeyError, TypeError):
+            return None
+
+        implied_volatility = None
+        try:
+            iv_snapshot = await self.market.implied_volatility(bybit_symbol)
+            implied_volatility = float(iv_snapshot["mark_iv"])
+        except (MarketDataFailure, KeyError, TypeError, ValueError):
+            pass
+
+        latest_by_venue: dict[str, dict] = {}
+        try:
+            for row in self.repo.recent_v6_microstructure(
+                symbol=display_symbol,
+                limit=20,
+            ):
+                latest_by_venue[str(row["venue"]).lower()] = row
+        except PersistenceFailure:
+            latest_by_venue = {}
+
+        bybit_row = latest_by_venue.get("bybit")
+        binance_row = latest_by_venue.get("binance")
+        bybit_imbalance = (
+            float(bybit_row["imbalance"]) if bybit_row is not None else None
+        )
+        binance_imbalance = (
+            float(binance_row["imbalance"]) if binance_row is not None else None
+        )
+        microstructure_age_ms = None
+        if bybit_row is not None and binance_row is not None:
+            try:
+                oldest_capture = min(
+                    datetime.fromisoformat(
+                        str(bybit_row["captured_at"]).replace("Z", "+00:00")
+                    ),
+                    datetime.fromisoformat(
+                        str(binance_row["captured_at"]).replace("Z", "+00:00")
+                    ),
+                )
+                microstructure_age_ms = max(
+                    0,
+                    int((observed_at - oldest_capture).total_seconds() * 1000),
+                )
+            except (TypeError, ValueError):
+                microstructure_age_ms = None
+
+        bid = float(ticker.get("bid") or 0)
+        ask = float(ticker.get("ask") or 0)
+        if bybit_row is not None:
+            spread_bps = float(bybit_row["spread_bps"])
+        elif bid > 0 and ask >= bid:
+            mid = (bid + ask) / 2.0
+            spread_bps = ((ask - bid) / mid) * 10_000 if mid > 0 else 0.0
+        else:
+            spread_bps = 0.0
+
+        realized_annualized = float(features["realized_vol_20"]) * math.sqrt(
+            (365 * 24 * 4) / 20
+        )
+        state = VolatilityRiskState(
+            symbol=display_symbol,
+            side=str(trade["side"]),
+            entry_price=float(trade["actual_entry"]),
+            atr_14=float(features["atr_14"]),
+            realized_volatility=max(0.0, realized_annualized),
+            implied_volatility=implied_volatility,
+            bybit_orderbook_imbalance=bybit_imbalance,
+            binance_orderbook_imbalance=binance_imbalance,
+            spread_bps=max(0.0, spread_bps),
+            market_regime=(
+                f"{features.get('trend', 'unknown')}|"
+                f"adx={float(features.get('adx_14') or 0):.2f}"
+            ),
+            microstructure_age_ms=microstructure_age_ms,
+        )
+        action = self.v6_risk_agent.decide(state)
+
+        trade_view = dict(trade)
+        if not action.shadow_mode and not action.force_no_trade:
+            stop_loss, take_profit_1 = project_live_levels(
+                trade,
+                atr=state.atr_14,
+                action=action,
+                minimum_risk_reward=self.settings.min_risk_reward,
+            )
+            trade_view["stop_loss"] = stop_loss
+            trade_view["take_profit_1"] = take_profit_1
+
+        return trade_view, action, state
+
     async def run(self, *, version: str = PAPER_EXPERIMENT_VERSION) -> dict:
         experiment = self.repo.get_experiment(version)
         if experiment is None:
