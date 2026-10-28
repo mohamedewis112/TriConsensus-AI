@@ -247,6 +247,35 @@ def analyze_regimes(observations: list[dict], *, folds: int = 4) -> dict:
     }
 
 
+def apply_data_quality_gate(
+    analysis: dict,
+    data_quality: dict,
+    *,
+    minimum_qualification_coverage: float = 0.90,
+    exploratory_minimum_coverage: float = 0.80,
+) -> tuple[dict, dict]:
+    gated = json.loads(json.dumps(analysis))
+    coverage = float(data_quality.get("coverage_ratio") or 0.0)
+    gate = {
+        "passed": coverage >= minimum_qualification_coverage,
+        "minimum_coverage_ratio_for_qualification": minimum_qualification_coverage,
+        "exploratory_minimum_coverage_ratio": exploratory_minimum_coverage,
+    }
+    if coverage < exploratory_minimum_coverage:
+        raise ValueError("data coverage below exploratory minimum")
+
+    raw_qualified = list(gated.get("qualified") or [])
+    if not gate["passed"]:
+        gated["research_candidates"] = raw_qualified
+        gated["qualified"] = []
+        gated["qualified_count"] = 0
+        for row in gated.get("ranked") or []:
+            if row.get("qualified"):
+                row["qualified"] = False
+                row["data_quality_blocked"] = True
+    return gated, gate
+
+
 async def run_regime_research(
     *,
     symbol: str,
@@ -262,21 +291,10 @@ async def run_regime_research(
     thresholds, observations = build_regime_observations(candles)
     analysis = analyze_regimes(observations)
     data_quality = archive_coverage_stats(candles, requested_days=days)
-    data_quality_gate = {
-        "passed": data_quality["coverage_ratio"] >= 0.90,
-        "minimum_coverage_ratio_for_qualification": 0.90,
-        "exploratory_minimum_coverage_ratio": 0.80,
-    }
-
-    raw_qualified = list(analysis.get("qualified") or [])
-    if not data_quality_gate["passed"]:
-        analysis["research_candidates"] = raw_qualified
-        analysis["qualified"] = []
-        analysis["qualified_count"] = 0
-        for row in analysis.get("ranked") or []:
-            if row.get("qualified"):
-                row["qualified"] = False
-                row["data_quality_blocked"] = True
+    analysis, data_quality_gate = apply_data_quality_gate(
+        analysis,
+        data_quality,
+    )
 
     report = {
         "experiment": "V4-REGIME-DISCOVERY",
