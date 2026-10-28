@@ -169,6 +169,56 @@ class SupabaseRepository:
             ) from exc
         return list(reversed(rows or []))
 
+    def recent_marl_reward_memory(self, *, limit: int = 80) -> list[dict]:
+        try:
+            rows = (
+                self.client.table("marl_reward_memory")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"marl reward memory read failed: {exc}") from exc
+        return list(reversed(rows or []))
+
+    def latest_marl_policy(self, agent_role: str) -> dict | None:
+        try:
+            rows = (
+                self.client.table("marl_policy_versions")
+                .select("*")
+                .eq("agent_role", agent_role)
+                .eq("status", "active")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"marl policy read failed: {exc}") from exc
+        return rows[0] if rows else None
+
+    def recent_v6_microstructure(
+        self,
+        *,
+        symbol: str,
+        limit: int = 20,
+    ) -> list[dict]:
+        try:
+            rows = (
+                self.client.table("v6_microstructure_snapshots")
+                .select("*")
+                .eq("symbol", symbol)
+                .order("captured_at", desc=True)
+                .limit(limit)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"microstructure read failed: {exc}") from exc
+        return list(reversed(rows or []))
+
     def decision_replay(self, consensus_id: str) -> dict | None:
         try:
             rows = (
