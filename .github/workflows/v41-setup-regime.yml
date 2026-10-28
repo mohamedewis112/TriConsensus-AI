@@ -1,10 +1,7 @@
 name: V4.1 Setup Regime Discovery
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v41-setup-regime.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
