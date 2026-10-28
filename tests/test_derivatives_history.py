@@ -7,6 +7,7 @@ from triconsensus.derivatives_history import (
     BybitDerivativesHistoryClient,
     DerivativesHistory,
     build_derivatives_feature_frame,
+    derivatives_quality_report,
 )
 
 
@@ -155,3 +156,55 @@ def test_reference_kline_request_uses_official_15m_interval():
     )
     assert call["interval"] == "15"
     assert call["limit"] == 1000
+
+
+def test_derivatives_quality_gate_is_fail_closed_on_missing_dense_data():
+    history = DerivativesHistory(
+        open_interest=[{"timestamp_ms": 900000, "open_interest": 100.0}],
+        funding=[{"timestamp_ms": 900000, "funding_rate": 0.0001}],
+        mark_klines=[{"start_ms": 900000, "close": 101.0}],
+        index_klines=[{"start_ms": 900000, "close": 100.0}],
+        premium_klines=[{"start_ms": 900000, "close": 0.01}],
+    )
+    candles = [
+        {"start_ms": 900000, "close": 100.5},
+        {"start_ms": 1800000, "close": 101.0},
+    ]
+    frame = build_derivatives_feature_frame(candles, history)
+    quality = derivatives_quality_report(
+        frame,
+        minimum_dense_coverage=0.75,
+        minimum_funding_coverage=0.75,
+    )
+    assert quality["passed"] is False
+    assert quality["default_action"] == "NO_TRADE"
+
+
+def test_derivatives_quality_gate_passes_complete_point_in_time_frame():
+    history = DerivativesHistory(
+        open_interest=[
+            {"timestamp_ms": 900000, "open_interest": 100.0},
+            {"timestamp_ms": 1800000, "open_interest": 110.0},
+        ],
+        funding=[{"timestamp_ms": 900000, "funding_rate": 0.0001}],
+        mark_klines=[
+            {"start_ms": 900000, "close": 101.0},
+            {"start_ms": 1800000, "close": 102.0},
+        ],
+        index_klines=[
+            {"start_ms": 900000, "close": 100.0},
+            {"start_ms": 1800000, "close": 100.0},
+        ],
+        premium_klines=[
+            {"start_ms": 900000, "close": 0.01},
+            {"start_ms": 1800000, "close": 0.02},
+        ],
+    )
+    candles = [
+        {"start_ms": 900000, "close": 100.5},
+        {"start_ms": 1800000, "close": 101.5},
+    ]
+    frame = build_derivatives_feature_frame(candles, history)
+    quality = derivatives_quality_report(frame)
+    assert quality["passed"] is True
+    assert quality["default_action"] == "RESEARCH_ONLY"
