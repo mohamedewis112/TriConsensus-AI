@@ -4,6 +4,7 @@ import gzip
 
 from triconsensus.kline_archive import (
     BybitKlineArchiveClient,
+    archive_coverage_stats,
     parse_archive_datetime,
     parse_mt4_kline_archive,
 )
@@ -39,3 +40,19 @@ def test_mt4_archive_parser_reads_headerless_ohlcv(tmp_path):
     assert candles[0]["close"] == 101
     assert candles[1]["volume"] == 15
     assert candles[0]["start_ms"] < candles[1]["start_ms"]
+
+
+def test_archive_coverage_stats_detects_missing_intervals():
+    candles = [
+        {"start_ms": 0},
+        {"start_ms": 900_000},
+        {"start_ms": 2_700_000},
+    ]
+    stats = archive_coverage_stats(
+        candles,
+        requested_days=1,
+    )
+    assert stats["observed_candles"] == 3
+    assert stats["ideal_candles"] == 96
+    assert stats["gap_count"] == 1
+    assert stats["largest_gap_ms"] == 1_800_000
