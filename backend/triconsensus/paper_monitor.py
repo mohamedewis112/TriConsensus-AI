@@ -388,42 +388,53 @@ class PaperTradeMonitor:
                                 abs(new_stop - old_stop) > 1e-12
                                 or abs(new_tp - old_tp) > 1e-12
                             ):
-                                self.repo.update_trade(
-                                    trade["id"],
-                                    {
-                                        "stop_loss": new_stop,
-                                        "take_profit_1": new_tp,
-                                    },
-                                )
+                                try:
+                                    self.repo.update_trade(
+                                        trade["id"],
+                                        {
+                                            "stop_loss": new_stop,
+                                            "take_profit_1": new_tp,
+                                        },
+                                    )
+                                except PersistenceFailure:
+                                    trade_view = dict(trade)
+                                    adaptive_signal = ExitSignal(
+                                        True,
+                                        "ADAPTIVE_LEVEL_PERSIST_FAILURE",
+                                    )
 
-                        self.repo.insert(
-                            "trade_events",
-                            {
-                                "experiment_id": experiment["id"],
-                                "trade_id": trade["id"],
-                                "event_type": "V6_RISK_ADAPT",
-                                "event_time": datetime.now(UTC).isoformat(),
-                                "payload": {
-                                    "state": live_state.model_dump(mode="json"),
-                                    "action": live_action.model_dump(mode="json"),
-                                    "previous_levels": {
-                                        "stop_loss": float(trade["stop_loss"]),
-                                        "take_profit_1": float(
-                                            trade["take_profit_1"]
-                                        ),
+                        try:
+                            self.repo.insert(
+                                "trade_events",
+                                {
+                                    "experiment_id": experiment["id"],
+                                    "trade_id": trade["id"],
+                                    "event_type": "V6_RISK_ADAPT",
+                                    "event_time": datetime.now(UTC).isoformat(),
+                                    "payload": {
+                                        "state": live_state.model_dump(mode="json"),
+                                        "action": live_action.model_dump(mode="json"),
+                                        "previous_levels": {
+                                            "stop_loss": float(trade["stop_loss"]),
+                                            "take_profit_1": float(
+                                                trade["take_profit_1"]
+                                            ),
+                                        },
+                                        "effective_levels": {
+                                            "stop_loss": float(
+                                                trade_view["stop_loss"]
+                                            ),
+                                            "take_profit_1": float(
+                                                trade_view["take_profit_1"]
+                                            ),
+                                        },
+                                        "post_entry_loss_widening_allowed": False,
                                     },
-                                    "effective_levels": {
-                                        "stop_loss": float(
-                                            trade_view["stop_loss"]
-                                        ),
-                                        "take_profit_1": float(
-                                            trade_view["take_profit_1"]
-                                        ),
-                                    },
-                                    "post_entry_loss_widening_allowed": False,
                                 },
-                            },
-                        )
+                            )
+                        except PersistenceFailure:
+                            # Audit failure cannot block a protective paper exit.
+                            pass
 
             if adaptive_signal is not None:
                 signal = adaptive_signal
