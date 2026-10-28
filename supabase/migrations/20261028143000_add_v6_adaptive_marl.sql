@@ -117,6 +117,8 @@ create index if not exists marl_policy_versions_role_created_idx
   on public.marl_policy_versions(agent_role, created_at desc);
 create index if not exists marl_policy_update_runs_created_idx
   on public.marl_policy_update_runs(created_at desc);
+create unique index if not exists v6_microstructure_checksum_uidx
+  on public.v6_microstructure_snapshots(checksum);
 create index if not exists v6_microstructure_symbol_venue_time_idx
   on public.v6_microstructure_snapshots(symbol, venue, captured_at desc);
 create index if not exists v6_volatility_symbol_time_idx
