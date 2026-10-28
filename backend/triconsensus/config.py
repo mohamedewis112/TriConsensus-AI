@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     v6_adverse_orderbook_imbalance: float = Field(default=0.35, ge=0.05, le=0.95)
     v6_microstructure_persist_interval_ms: int = Field(default=250, ge=20, le=5000)
     v6_trade_horizon_minutes: int = Field(default=180, ge=30, le=720)
+    v6_iv_poll_seconds: int = Field(default=300, ge=60, le=3600)
 
     @model_validator(mode="after")
     def prohibit_live_trading(self) -> "Settings":
