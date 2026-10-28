@@ -60,27 +60,30 @@ class PaperDecisionCycle:
         self.v6_policy = None
         self.portfolio_adapter = None
         self.dynamic_risk_agent = None
-        if settings.v6_marl_enabled:
-            self.v6_policy = MAPPOPolicyBundle(
-                portfolio_input_dim=15,
-                risk_input_dim=8,
-                global_state_dim=23,
-            )
-            try:
-                policy_row = self.repo.latest_marl_policy("mappo_shared")
-                if policy_row and policy_row.get("weights"):
-                    self.v6_policy.load_payload(
-                        policy_row["weights"],
-                        policy_version=str(policy_row["version"]),
+        if settings.v6_marl_observation_active:
+            # Shadow observation must not require the heavy Torch runtime.
+            # Only an explicitly enabled MARL runtime attempts to load MAPPO weights.
+            if settings.v6_marl_enabled:
+                try:
+                    self.v6_policy = MAPPOPolicyBundle(
+                        portfolio_input_dim=15,
+                        risk_input_dim=8,
+                        global_state_dim=23,
                     )
-            except (PersistenceFailure, MARLDependencyError, ValueError, KeyError):
-                # Shadow mode is allowed to continue with a neutral/untrained policy.
-                # Enforcement will fail closed inside the adaptive agents.
-                pass
+                    policy_row = self.repo.latest_marl_policy("mappo_shared")
+                    if policy_row and policy_row.get("weights"):
+                        self.v6_policy.load_payload(
+                            policy_row["weights"],
+                            policy_version=str(policy_row["version"]),
+                        )
+                except (PersistenceFailure, MARLDependencyError, ValueError, KeyError):
+                    # Shadow mode is allowed to continue with a neutral/untrained policy.
+                    # Enforcement will fail closed inside the adaptive agents.
+                    self.v6_policy = None
 
             self.portfolio_adapter = MetaRLPortfolioAdapterAgent(
                 self.v6_policy,
-                shadow_mode=settings.v6_marl_shadow_mode,
+                shadow_mode=settings.v6_marl_effective_shadow_mode,
                 blacklist_probability=settings.v6_blacklist_probability,
                 minimum_blacklist_samples=settings.v6_min_blacklist_samples,
                 hard_losing_streak=settings.v6_hard_losing_streak,
@@ -88,7 +91,7 @@ class PaperDecisionCycle:
             )
             self.dynamic_risk_agent = DynamicVolatilityRiskAgent(
                 self.v6_policy,
-                shadow_mode=settings.v6_marl_shadow_mode,
+                shadow_mode=settings.v6_marl_effective_shadow_mode,
                 max_microstructure_age_ms=settings.v6_max_microstructure_age_ms,
                 adverse_imbalance=settings.v6_adverse_orderbook_imbalance,
             )
@@ -138,14 +141,15 @@ class PaperDecisionCycle:
                     "adaptive_layer": {
                         "version": "V6",
                         "architecture": "constrained_mappo_neuro_symbolic",
-                        "shadow_mode": self.settings.v6_marl_shadow_mode,
+                        "shadow_mode": self.settings.v6_marl_effective_shadow_mode,
+                        "observe_only": not self.settings.v6_marl_enabled,
                         "reward_window": self.settings.v6_reward_window,
                         "warmup_trades_per_asset": self.settings.v6_min_warmup_trades_per_asset,
                         "drawdown_penalty": self.settings.v6_drawdown_penalty,
                         "risk_engine_authority": "deterministic_veto_supreme",
                     }
                 }
-                if self.settings.v6_marl_enabled
+                if self.settings.v6_marl_observation_active
                 else {}
             ),
         }
@@ -160,7 +164,7 @@ class PaperDecisionCycle:
         experiment = self.repo.ensure_experiment(
             version=(
                 V6_PAPER_EXPERIMENT_VERSION
-                if self.settings.v6_marl_enabled
+                if self.settings.v6_marl_observation_active
                 else PAPER_EXPERIMENT_VERSION
             ),
             config=self.experiment_config(),
@@ -342,7 +346,7 @@ class PaperDecisionCycle:
         )
 
         adaptive_context: dict = {}
-        if self.settings.v6_marl_enabled:
+        if self.settings.v6_marl_observation_active:
             reward_records: list[RewardMemoryRecord] = []
             try:
                 for row in self.repo.recent_marl_reward_memory(
@@ -392,7 +396,7 @@ class PaperDecisionCycle:
                         },
                     )
                 except PersistenceFailure:
-                    if not self.settings.v6_marl_shadow_mode:
+                    if self.settings.v6_marl_enforcement_active:
                         implied_volatility = None
                         iv_snapshot = None
             except (MarketDataFailure, KeyError, TypeError, ValueError):
@@ -589,7 +593,7 @@ class PaperDecisionCycle:
                 },
             )
 
-        if self.settings.v6_marl_enabled:
+        if self.settings.v6_marl_observation_active:
             try:
                 for role, action in (result.get("v6_adaptive") or {}).items():
                     self.repo.insert(
@@ -613,7 +617,7 @@ class PaperDecisionCycle:
                         },
                     )
             except PersistenceFailure:
-                if not self.settings.v6_marl_shadow_mode:
+                if self.settings.v6_marl_enforcement_active:
                     return {
                         "outcome": "NO_TRADE",
                         "reason": "v6_adaptive_audit_failure",
