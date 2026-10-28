@@ -42,6 +42,39 @@ class V51LiveSignal:
     reason: str
 
 
+def aggregate_5m_ratio_to_15m(
+    points: list[GlobalLongShortPoint],
+) -> list[GlobalLongShortPoint]:
+    buckets: dict[int, list[GlobalLongShortPoint]] = {}
+    for point in sorted(points, key=lambda item: item.timestamp_ms):
+        bucket_end = (
+            ((point.timestamp_ms - 1) // (15 * 60_000)) + 1
+        ) * (15 * 60_000)
+        buckets.setdefault(bucket_end, []).append(point)
+
+    aggregated: list[GlobalLongShortPoint] = []
+    for bucket_end in sorted(buckets):
+        rows = buckets[bucket_end]
+        expected = [
+            bucket_end - 10 * 60_000,
+            bucket_end - 5 * 60_000,
+            bucket_end,
+        ]
+        timestamps = [row.timestamp_ms for row in rows]
+        if timestamps != expected:
+            continue
+        last = rows[-1]
+        aggregated.append(
+            GlobalLongShortPoint(
+                timestamp_ms=bucket_end,
+                ratio=last.ratio,
+                long_account=last.long_account,
+                short_account=last.short_account,
+            )
+        )
+    return aggregated
+
+
 class BinanceGlobalRatioClient:
     def __init__(
         self,
@@ -70,8 +103,8 @@ class BinanceGlobalRatioClient:
         limit: int = 32,
     ) -> list[GlobalLongShortPoint]:
         self._validate_symbol(symbol)
-        if not 5 <= limit <= 500:
-            raise ValueError("ratio limit must be between 5 and 500")
+        if not 15 <= limit <= 500:
+            raise ValueError("raw 5m ratio limit must be between 15 and 500")
 
         try:
             async with httpx.AsyncClient(
@@ -83,7 +116,7 @@ class BinanceGlobalRatioClient:
                     f"{self.base_url}/futures/data/globalLongShortAccountRatio",
                     params={
                         "symbol": symbol,
-                        "period": "15m",
+                        "period": "5m",
                         "limit": limit,
                     },
                 )
@@ -128,9 +161,12 @@ class BinanceGlobalRatioClient:
                 short_account=short_account,
             )
 
-        ordered = [points[key] for key in sorted(points)]
+        raw = [points[key] for key in sorted(points)]
+        ordered = aggregate_5m_ratio_to_15m(raw)
         if len(ordered) < 5:
-            raise BinanceLiveContextFailure("fewer than five ratio observations")
+            raise BinanceLiveContextFailure(
+                "fewer than five complete aggregated 15m ratio observations"
+            )
         return ordered
 
     def signal_from_points(

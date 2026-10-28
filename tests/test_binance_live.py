@@ -7,6 +7,7 @@ from triconsensus.binance_live import (
     BinanceGlobalRatioClient,
     BinanceLiveContextFailure,
     GlobalLongShortPoint,
+    aggregate_5m_ratio_to_15m,
     normalize_global_ratio_timestamp,
 )
 
@@ -122,3 +123,38 @@ def test_live_timestamp_normalizes_post_2026_start_labels():
     cutoff = 1782345600000
     assert normalize_global_ratio_timestamp(before) == before
     assert normalize_global_ratio_timestamp(cutoff) == cutoff + 5 * 60_000
+
+
+
+def test_live_adapter_aggregates_same_5m_metric_to_15m_protocol():
+    base_end = 1_700_000_100_000
+    base_end -= base_end % (15 * 60_000)
+    raw = []
+    ratio = 1.0
+    for bucket in range(6):
+        end = base_end + bucket * 15 * 60_000
+        for offset in (10, 5, 0):
+            ratio += 0.01
+            raw.append(
+                point(
+                    end - offset * 60_000,
+                    ratio,
+                )
+            )
+    aggregated = aggregate_5m_ratio_to_15m(raw)
+    assert len(aggregated) == 6
+    assert all(
+        right.timestamp_ms - left.timestamp_ms == 15 * 60_000
+        for left, right in zip(aggregated, aggregated[1:])
+    )
+    assert aggregated[0].ratio == raw[2].ratio
+
+
+def test_live_adapter_drops_incomplete_15m_metric_bucket():
+    end = 1_700_000_100_000
+    end -= end % (15 * 60_000)
+    raw = [
+        point(end - 10 * 60_000, 1.0),
+        point(end, 1.1),
+    ]
+    assert aggregate_5m_ratio_to_15m(raw) == []
