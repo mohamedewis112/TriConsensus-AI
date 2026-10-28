@@ -37,4 +37,4 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          pytest -q tests/test_v6_marl.py tests/test_v6_graph.py tests/test_v6_paper_monitor.py tests/test_v6_policy_worker.py tests/test_v6_mappo_torch.py
+          pytest -q tests/test_v6_*.py
