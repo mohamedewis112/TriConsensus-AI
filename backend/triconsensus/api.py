@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
+import hmac
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -177,10 +179,73 @@ async def research_cycle(symbol: str, request: Request) -> dict:
 
 
 
-@app.get("/v1/runtime-status")
+def _require_cron_secret(request: Request) -> None:
+    secret = os.getenv("CRON_SECRET") or ""
+    auth = request.headers.get("authorization") or ""
+    expected = f"Bearer {secret}"
+    if not secret or not hmac.compare_digest(auth, expected):
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+
+@app.get("/v1/runtime/cron")
+async def paper_runtime_cron(request: Request) -> dict:
+    _require_cron_secret(request)
+    if settings.trading_mode.value != "paper" or settings.v6_marl_enforcement_active:
+        raise HTTPException(
+            status_code=503,
+            detail="paper runtime safety invariant failed",
+        )
+
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        service = PaperRuntimeService(
+            settings,
+            vercel_oidc_token=oidc_token,
+        )
+        monitor_result = await service.monitor()
+    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"NO_ACTION: {exc}",
+        ) from exc
+
+    cycles: list[dict] = []
+    for symbol in ("BTCUSDT", "ETHUSDT"):
+        try:
+            cycles.append(await service.run_symbol(symbol=symbol))
+        except (
+            PaperRuntimeFailure,
+            RuntimeGatewayFailure,
+            LLMFailure,
+            MarketDataFailure,
+            ValueError,
+        ) as exc:
+            cycles.append(
+                {
+                    "symbol": symbol,
+                    "outcome": "NO_TRADE",
+                    "reason": "paper_runtime_failure",
+                    "error": type(exc).__name__,
+                    "paper_only": True,
+                    "live_trading": False,
+                    "persisted": False,
+                }
+            )
+
+    return {
+        "status": "COMPLETED",
+        "paper_only": True,
+        "live_trading": False,
+        "v6_enforcement": False,
+        "monitor": monitor_result,
+        "cycles": cycles,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@app.get("/v1/runtime/status")
 async def paper_runtime_status(request: Request) -> dict:
-    if settings.app_env.lower() not in {"development", "preview", "staging"}:
-        raise HTTPException(status_code=404, detail="not found")
+    _require_cron_secret(request)
     oidc_token = request.headers.get("x-vercel-oidc-token")
     try:
         return await PaperRuntimeService(
@@ -188,37 +253,10 @@ async def paper_runtime_status(request: Request) -> dict:
             vercel_oidc_token=oidc_token,
         ).status()
     except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
-        raise HTTPException(status_code=503, detail=f"RUNTIME_UNAVAILABLE: {exc}") from exc
-
-
-@app.post("/v1/runtime-cycle/{symbol}")
-async def paper_runtime_cycle(symbol: str, request: Request) -> dict:
-    if settings.app_env.lower() not in {"development", "preview", "staging"}:
-        raise HTTPException(status_code=404, detail="not found")
-    oidc_token = request.headers.get("x-vercel-oidc-token")
-    try:
-        return await PaperRuntimeService(
-            settings,
-            vercel_oidc_token=oidc_token,
-        ).run_symbol(symbol=symbol)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
-        raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
-
-
-@app.post("/v1/runtime-monitor")
-async def paper_runtime_monitor(request: Request) -> dict:
-    if settings.app_env.lower() not in {"development", "preview", "staging"}:
-        raise HTTPException(status_code=404, detail="not found")
-    oidc_token = request.headers.get("x-vercel-oidc-token")
-    try:
-        return await PaperRuntimeService(
-            settings,
-            vercel_oidc_token=oidc_token,
-        ).monitor()
-    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
-        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc
+        raise HTTPException(
+            status_code=503,
+            detail=f"RUNTIME_UNAVAILABLE: {exc}",
+        ) from exc
 
 
 @app.get("/v1/preflight", dependencies=[Depends(require_control_key)])
