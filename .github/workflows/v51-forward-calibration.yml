@@ -34,6 +34,7 @@ jobs:
       - name: Build frozen V5.1 calibration
         env:
           PYTHONPATH: backend
+          BYBIT_CANDLE_CACHE_URL: "https://mhrrbnufkiveynbasyiy.supabase.co/functions/v1/v51-candle-cache?forceFunctionRegion=eu-west-3"
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             END_DATE="${{ inputs.calibration_end_date }}"

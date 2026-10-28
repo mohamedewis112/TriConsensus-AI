@@ -5,6 +5,7 @@ import calendar
 import csv
 from datetime import UTC, date, datetime, timedelta
 import gzip
+import os
 from pathlib import Path
 import tempfile
 
@@ -141,6 +142,72 @@ class BybitKlineArchiveClient:
         name = f"{symbol}_15_{start}_{end}.csv.gz"
         return f"{self.base_url}/{symbol}/{year:04d}/{name}"
 
+    async def prefetched_15m(
+        self,
+        symbol: str,
+        *,
+        start_ms: int,
+        end_ms: int,
+    ) -> list[dict]:
+        cache_url = os.getenv("BYBIT_CANDLE_CACHE_URL", "").strip()
+        if not cache_url:
+            return []
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(60.0, connect=15.0),
+                follow_redirects=True,
+                headers={"User-Agent": "TriConsensus-AI/0.3 research-cache"},
+            ) as client:
+                response = await client.get(
+                    cache_url,
+                    params={
+                        "symbol": symbol,
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, ValueError):
+            return []
+
+        if payload.get("ok") is not True:
+            return []
+        if payload.get("source") != "bybit_v5_public_prefetched_supabase":
+            return []
+
+        candles: list[dict] = []
+        for row in payload.get("rows") or []:
+            if not isinstance(row, list) or len(row) != 7:
+                continue
+            try:
+                timestamp = int(row[0])
+                open_price = float(row[1])
+                high = float(row[2])
+                low = float(row[3])
+                close = float(row[4])
+                volume = float(row[5])
+                turnover = float(row[6])
+            except (TypeError, ValueError):
+                continue
+            if not start_ms <= timestamp < end_ms:
+                continue
+            if min(open_price, high, low, close) <= 0 or volume < 0:
+                continue
+            candles.append(
+                {
+                    "start_ms": timestamp,
+                    "open": open_price,
+                    "high": high,
+                    "low": low,
+                    "close": close,
+                    "volume": volume,
+                    "turnover": turnover,
+                }
+            )
+        candles.sort(key=lambda row: int(row["start_ms"]))
+        return candles
+
     async def monthly_15m(
         self,
         symbol: str,
@@ -199,6 +266,29 @@ class BybitKlineArchiveClient:
         final_day = end_day or (datetime.now(UTC).date() - timedelta(days=2))
         first_day = final_day - timedelta(days=days - 1)
 
+        start_ms = int(
+            datetime.combine(
+                first_day,
+                datetime.min.time(),
+                tzinfo=UTC,
+            ).timestamp()
+            * 1000
+        )
+        end_ms = int(
+            datetime.combine(
+                final_day + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=UTC,
+            ).timestamp()
+            * 1000
+        )
+
+        prefetched = await self.prefetched_15m(
+            symbol,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+
         months: list[tuple[int, int]] = []
         cursor = date(first_day.year, first_day.month, 1)
         final_month = date(final_day.year, final_day.month, 1)
@@ -227,23 +317,11 @@ class BybitKlineArchiveClient:
         monthly_results = await asyncio.gather(
             *(fetch_month_safe(year, month) for year, month in months)
         )
-        candles_by_start: dict[int, dict] = {}
-        start_ms = int(
-            datetime.combine(
-                first_day,
-                datetime.min.time(),
-                tzinfo=UTC,
-            ).timestamp()
-            * 1000
-        )
-        end_ms = int(
-            datetime.combine(
-                final_day + timedelta(days=1),
-                datetime.min.time(),
-                tzinfo=UTC,
-            ).timestamp()
-            * 1000
-        )
+        candles_by_start: dict[int, dict] = {
+            int(row["start_ms"]): row
+            for row in prefetched
+            if start_ms <= int(row["start_ms"]) < end_ms
+        }
 
         missing_months: list[tuple[int, int]] = []
         for month_rows, missing in monthly_results:
@@ -262,7 +340,20 @@ class BybitKlineArchiveClient:
             cursor_day = max(first_day, month_first)
             final_missing_day = min(final_day, month_last)
             while cursor_day <= final_missing_day:
-                fallback_days.append(cursor_day)
+                day_start_ms = int(
+                    datetime.combine(
+                        cursor_day,
+                        datetime.min.time(),
+                        tzinfo=UTC,
+                    ).timestamp()
+                    * 1000
+                )
+                expected = {
+                    day_start_ms + offset * 15 * 60 * 1000
+                    for offset in range(96)
+                }
+                if not expected.issubset(candles_by_start):
+                    fallback_days.append(cursor_day)
                 cursor_day += timedelta(days=1)
 
         if fallback_days:
