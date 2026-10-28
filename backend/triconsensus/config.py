@@ -65,7 +65,8 @@ class Settings(BaseSettings):
     v6_hard_mean_net_return: float = Field(default=-0.003, ge=-0.05, le=0.0)
     v6_max_microstructure_age_ms: int = Field(default=2000, ge=100, le=10000)
     v6_adverse_orderbook_imbalance: float = Field(default=0.35, ge=0.05, le=0.95)
-    v6_microstructure_persist_interval_ms: int = Field(default=250, ge=20, le=5000)
+    v6_microstructure_persist_interval_ms: int = Field(default=60000, ge=1000, le=300000)
+    v6_microstructure_latest_interval_ms: int = Field(default=1000, ge=200, le=10000)
     v6_trade_horizon_minutes: int = Field(default=180, ge=30, le=720)
     v6_iv_poll_seconds: int = Field(default=300, ge=60, le=3600)
 
