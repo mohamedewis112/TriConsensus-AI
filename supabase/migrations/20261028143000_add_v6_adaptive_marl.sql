@@ -216,15 +216,15 @@ returns table(
 language sql
 security invoker
 set search_path = pg_catalog, pgmq
-as $
+as '
   select r.msg_id, r.read_ct, r.enqueued_at, r.vt, r.message
   from pgmq.read(
-    'triconsensus_marl_rewards',
+    ''triconsensus_marl_rewards'',
     greatest(30, least(p_vt, 3600)),
     greatest(1, least(p_qty, 128)),
-    '{}'::jsonb
+    ''{}''::jsonb
   ) r;
-$;
+';
 revoke all on function public.v6_dequeue_marl_rewards(integer,integer)
   from public, anon, authenticated;
 grant execute on function public.v6_dequeue_marl_rewards(integer,integer)
@@ -235,9 +235,9 @@ returns boolean
 language sql
 security invoker
 set search_path = pg_catalog, pgmq
-as $$
-  select pgmq.archive('triconsensus_marl_rewards', p_msg_id);
-$$;
+as '
+  select pgmq.archive(''triconsensus_marl_rewards'', p_msg_id);
+';
 revoke all on function public.v6_archive_marl_reward(bigint)
   from public, anon, authenticated;
 grant execute on function public.v6_archive_marl_reward(bigint)
