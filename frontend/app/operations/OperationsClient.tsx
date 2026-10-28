@@ -65,6 +65,8 @@ function paperStats(snapshot: OperationsSnapshot) {
     unrealized,
     equity: starting + realized + unrealized,
     fees: Number(p.fees ?? 0),
+    grossProfit,
+    grossLoss,
     open: Number(p.open_positions ?? 0),
     closed,
     winRate: closed ? wins / closed : 0,
@@ -103,7 +105,7 @@ function TimelineRow({event}: {event: OpsEvent}) {
 
 export default function OperationsClient({initial}: {initial: OperationsSnapshot | null}) {
   const [data, setData] = useState<OperationsSnapshot | null>(initial);
-  const [intervalMs, setIntervalMs] = useState(5000);
+  const [intervalMs, setIntervalMs] = useState(1000);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("ALL");
   const [lastError, setLastError] = useState<string | null>(null);
@@ -181,11 +183,15 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
             {paper ? (paper.realized >= 0 ? "+" : "") + money(paper.realized) + " realized · " + (paper.unrealized >= 0 ? "+" : "") + money(paper.unrealized) + " unrealized" : "—"}
           </span>
           <div className="financeMini">
+            <div><span>Starting capital</span><strong>{paper ? money(paper.starting) : "—"}</strong></div>
             <div><span>Closed</span><strong>{paper?.closed ?? 0}</strong></div>
             <div><span>Open</span><strong>{paper?.open ?? 0}</strong></div>
             <div><span>Win rate</span><strong>{paper ? pct(paper.winRate) : "—"}</strong></div>
             <div><span>PF</span><strong>{paper?.profitFactor == null ? "—" : Number.isFinite(paper.profitFactor) ? paper.profitFactor.toFixed(2) : "∞"}</strong></div>
             <div><span>Expectancy</span><strong>{paper ? money(paper.expectancy) : "—"}</strong></div>
+            <div><span>Gross profit</span><strong>{paper ? money(paper.grossProfit) : "—"}</strong></div>
+            <div><span>Gross loss</span><strong>{paper ? money(paper.grossLoss) : "—"}</strong></div>
+            <div><span>Fees</span><strong>{paper ? money(paper.fees) : "—"}</strong></div>
             <div><span>Exposure</span><strong>{paper ? pct(paper.exposure) : "—"}</strong></div>
           </div>
         </article>
