@@ -89,6 +89,36 @@ def parse_mt4_kline_archive(path: Path) -> list[dict]:
     return candles
 
 
+def archive_coverage_stats(
+    candles: list[dict],
+    *,
+    requested_days: int,
+    interval_ms: int = 15 * 60 * 1000,
+) -> dict:
+    if requested_days <= 0 or interval_ms <= 0:
+        raise ValueError("invalid coverage parameters")
+    if not candles:
+        return {
+            "observed_candles": 0,
+            "ideal_candles": requested_days * (86_400_000 // interval_ms),
+            "coverage_ratio": 0.0,
+            "gap_count": 0,
+            "largest_gap_ms": 0,
+        }
+
+    starts = sorted(int(row["start_ms"]) for row in candles)
+    diffs = [b - a for a, b in zip(starts, starts[1:])]
+    gaps = [diff for diff in diffs if diff != interval_ms]
+    ideal = requested_days * (86_400_000 // interval_ms)
+    return {
+        "observed_candles": len(starts),
+        "ideal_candles": int(ideal),
+        "coverage_ratio": len(starts) / ideal if ideal else 0.0,
+        "gap_count": len(gaps),
+        "largest_gap_ms": max(gaps) if gaps else interval_ms,
+    }
+
+
 class BybitKlineArchiveClient:
     def __init__(
         self,
@@ -216,10 +246,11 @@ class BybitKlineArchiveClient:
                 candles_by_start[key]
                 for key in sorted(candles_by_start)
             ]
-            if len(candles) < days * 90:
+            quality = archive_coverage_stats(candles, requested_days=days)
+            if quality["coverage_ratio"] < 0.90:
                 raise PublicArchiveFailure(
                     "MT4 kline coverage too sparse: "
-                    f"{len(candles)} candles for {days} requested days"
+                    f'{quality["coverage_ratio"]:.3f} for {days} requested days'
                 )
             return candles
         except PublicArchiveFailure:
