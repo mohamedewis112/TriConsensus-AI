@@ -175,12 +175,13 @@ begin
       'research_outcomes', coalesce((
         select jsonb_agg(to_jsonb(o) order by o.entry_context_timestamp)
         from (
-          select symbol, side, entry_price::float8, exit_price::float8,
-                 gross_return::float8, net_return::float8, hit,
-                 entry_context_timestamp, exit_candle_open_time, evaluated_at
-          from public.strategy_forward_rule_outcomes
-          where payload->>'capture_mode'='reconstructed_oos'
-          order by entry_context_timestamp
+          select o.symbol, o.side, o.entry_price::float8, o.exit_price::float8,
+                 o.gross_return::float8, o.net_return::float8, o.hit,
+                 o.entry_context_timestamp, o.exit_candle_open_time, o.evaluated_at
+          from public.strategy_forward_rule_outcomes o
+          join public.strategy_forward_rule_selections s on s.id=o.selection_id
+          where s.payload->>'capture_mode'='reconstructed_oos'
+          order by o.entry_context_timestamp
         ) o
       ), '[]'::jsonb)
     ),
