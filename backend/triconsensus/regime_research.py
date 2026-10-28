@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .archive_data import BybitPublicArchiveClient
+from .kline_archive import BybitKlineArchiveClient
 from .features import _adx, _atr, _rsi
 from .regimes import (
     classify_regime,
