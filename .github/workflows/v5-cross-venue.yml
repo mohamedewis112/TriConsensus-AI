@@ -1,10 +1,7 @@
 name: V5 Cross Venue Evidence
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v5-cross-venue.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
