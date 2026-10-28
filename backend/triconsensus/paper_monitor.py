@@ -330,7 +330,10 @@ class PaperTradeMonitor:
             mae, mfe = update_excursions(trade, last_price)
 
             open_payload: dict = {}
+            trade_view = dict(trade)
             trailing_lock_fraction = 0.0
+            adaptive_signal: ExitSignal | None = None
+
             if version.startswith("V6"):
                 try:
                     open_events = [
@@ -343,20 +346,88 @@ class PaperTradeMonitor:
                     )
                 except PersistenceFailure:
                     open_payload = {}
-                dynamic_action = (
+
+                opening_dynamic_action = (
                     (open_payload.get("v6_adaptive") or {}).get("dynamic_risk") or {}
                 )
-                if not bool(dynamic_action.get("shadow_mode", True)):
+                if not bool(opening_dynamic_action.get("shadow_mode", True)):
                     trailing_lock_fraction = max(
                         0.0,
                         min(
                             0.90,
-                            float(dynamic_action.get("trailing_lock_fraction") or 0),
+                            float(
+                                opening_dynamic_action.get("trailing_lock_fraction")
+                                or 0
+                            ),
                         ),
                     )
 
-            elapsed_seconds = duration_seconds(str(trade["opened_at"]), datetime.now(UTC))
-            if (
+                overlay = await self._fresh_v6_risk_overlay(
+                    trade=trade,
+                    bybit_symbol=bybit_symbol,
+                    display_symbol=display_symbol,
+                    ticker=ticker,
+                )
+                if overlay is not None:
+                    trade_view, live_action, live_state = overlay
+                    if not live_action.shadow_mode:
+                        trailing_lock_fraction = float(
+                            live_action.trailing_lock_fraction
+                        )
+                        if live_action.force_no_trade:
+                            adaptive_signal = ExitSignal(
+                                True,
+                                "ADAPTIVE_RISK_VETO",
+                            )
+                        else:
+                            old_stop = float(trade["stop_loss"])
+                            old_tp = float(trade["take_profit_1"])
+                            new_stop = float(trade_view["stop_loss"])
+                            new_tp = float(trade_view["take_profit_1"])
+                            if (
+                                abs(new_stop - old_stop) > 1e-12
+                                or abs(new_tp - old_tp) > 1e-12
+                            ):
+                                self.repo.update_trade(
+                                    trade["id"],
+                                    {
+                                        "stop_loss": new_stop,
+                                        "take_profit_1": new_tp,
+                                    },
+                                )
+
+                        self.repo.insert(
+                            "trade_events",
+                            {
+                                "experiment_id": experiment["id"],
+                                "trade_id": trade["id"],
+                                "event_type": "V6_RISK_ADAPT",
+                                "event_time": datetime.now(UTC).isoformat(),
+                                "payload": {
+                                    "state": live_state.model_dump(mode="json"),
+                                    "action": live_action.model_dump(mode="json"),
+                                    "previous_levels": {
+                                        "stop_loss": float(trade["stop_loss"]),
+                                        "take_profit_1": float(
+                                            trade["take_profit_1"]
+                                        ),
+                                    },
+                                    "effective_levels": {
+                                        "stop_loss": float(
+                                            trade_view["stop_loss"]
+                                        ),
+                                        "take_profit_1": float(
+                                            trade_view["take_profit_1"]
+                                        ),
+                                    },
+                                    "post_entry_loss_widening_allowed": False,
+                                },
+                            },
+                        )
+
+            if adaptive_signal is not None:
+                signal = adaptive_signal
+            elif (
                 version.startswith("V6")
                 and horizon_expired(
                     str(trade["opened_at"]),
@@ -367,7 +438,7 @@ class PaperTradeMonitor:
                 signal = ExitSignal(True, "HORIZON_LIMIT")
             else:
                 signal = evaluate_exit(
-                    trade,
+                    trade_view,
                     last_price,
                     mfe=mfe,
                     trailing_lock_fraction=trailing_lock_fraction,
