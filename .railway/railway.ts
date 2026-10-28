@@ -26,7 +26,8 @@ export default defineRailway(() => {
       BYBIT_BASE_URL: "https://api.bybit.com",
       BYBIT_WS_URL: "wss://stream.bybit.com/v5/public/linear",
       BINANCE_WS_URL: "wss://fstream.binance.com/public/ws",
-      V6_MICROSTRUCTURE_PERSIST_INTERVAL_MS: "1000",
+      V6_MICROSTRUCTURE_PERSIST_INTERVAL_MS: "60000",
+      V6_MICROSTRUCTURE_LATEST_INTERVAL_MS: "1000",
     },
   });
 
