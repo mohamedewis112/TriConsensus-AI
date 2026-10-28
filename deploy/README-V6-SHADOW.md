@@ -53,3 +53,19 @@ docker compose -f deploy/docker-compose.v6-shadow.yml down
 ```
 
 Do not change `V6_MARL_ENABLED` to true as part of deployment. Enforcement requires a separate scientific promotion decision after sufficient shadow evidence.
+
+
+## Lightweight free-tier collector
+
+For always-on evidence collection without Torch, use:
+
+- `deploy/v6-shadow-collector.Dockerfile`
+- `.railway/railway.ts`
+- `python -m triconsensus.v6_shadow_collector`
+
+It collects:
+
+- Bybit + Binance cross-venue order-book microstructure for BTC/ETH
+- Bybit front-expiry near-ATM option mark IV for BTC/ETH every `V6_IV_POLL_SECONDS`
+
+The collector has **no trading authority** and refuses to start if V6 enforcement is enabled. It requires only `SUPABASE_SERVICE_ROLE_KEY` as a runtime secret.
