@@ -291,7 +291,11 @@ class DynamicVolatilityRiskAgent:
             return self._symbolic_projection(state, base)
 
         try:
-            raw = np.asarray(self.policy.risk_action(self.state_vector(state)), dtype=float)
+            raw_values, policy_log_prob = self.policy.risk_action_with_log_prob(
+                self.state_vector(state),
+                stochastic=self.shadow_mode,
+            )
+            raw = np.asarray(raw_values, dtype=float)
         except (MARLDependencyError, MARLPolicyNotReady, ValueError):
             failed = base.model_copy(
                 update={
@@ -312,6 +316,7 @@ class DynamicVolatilityRiskAgent:
             policy_version=getattr(self.policy, "policy_version", "v6-mappo"),
             reason="mappo_raw_action",
             shadow_mode=self.shadow_mode,
+            policy_log_prob=policy_log_prob,
         )
         return self._symbolic_projection(state, neural)
 
