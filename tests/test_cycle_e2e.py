@@ -113,8 +113,8 @@ class FakeMarket:
                 {
                     "start_ms": 1_700_000_000_000 + i * 900_000,
                     "open": close - 0.04,
-                    "high": close + 0.20,
-                    "low": close - 0.20,
+                    "high": close + 2.00,
+                    "low": close - 2.00,
                     "close": close,
                     "volume": 1000.0 + (i % 7) * 17.0,
                     "turnover": close * (1000.0 + (i % 7) * 17.0),
