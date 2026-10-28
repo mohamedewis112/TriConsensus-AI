@@ -13,6 +13,8 @@ from .levels import TradeLevels, validate_proposal_levels
 from .llm import LLMFailure
 from .risk import DeterministicRiskEngine, RiskInput
 from .v51_forward import V51_MODEL_FAMILY
+from .v6_agents import DynamicVolatilityRiskAgent, MetaRLPortfolioAdapterAgent
+from .v6_models import DynamicRiskAction, PortfolioAction, PortfolioState, VolatilityRiskState
 
 
 class DecisionState(TypedDict, total=False):
@@ -22,6 +24,9 @@ class DecisionState(TypedDict, total=False):
     ml_evidence: dict[str, Any]
     account_state: dict[str, Any]
     allowed_levels: TradeLevels
+    adaptive_context: dict[str, Any]
+    portfolio_action: PortfolioAction
+    dynamic_risk_action: DynamicRiskAction
     market_agent: MarketIntel
     proposal: TradeProposal
     critic: DevilsAdvocate
@@ -32,9 +37,17 @@ class DecisionState(TypedDict, total=False):
 
 
 class TriConsensusGraph:
-    def __init__(self, agents: AgentService, risk: DeterministicRiskEngine) -> None:
+    def __init__(
+        self,
+        agents: AgentService,
+        risk: DeterministicRiskEngine,
+        portfolio_adapter: MetaRLPortfolioAdapterAgent | None = None,
+        dynamic_risk_agent: DynamicVolatilityRiskAgent | None = None,
+    ) -> None:
         self.agents = agents
         self.risk = risk
+        self.portfolio_adapter = portfolio_adapter
+        self.dynamic_risk_agent = dynamic_risk_agent
         self.compiled = self._build()
 
     def precheck_node(self, state: DecisionState) -> dict[str, Any]:
@@ -51,6 +64,72 @@ class TriConsensusGraph:
         return {}
 
     def after_precheck(self, state: DecisionState) -> str:
+        return "fail" if state.get("failure_reason") else "portfolio"
+
+    def portfolio_node(self, state: DecisionState) -> dict[str, Any]:
+        if self.portfolio_adapter is None:
+            return {}
+        raw = (state.get("adaptive_context") or {}).get("portfolio_state")
+        if raw is None:
+            return {"failure_reason": "v6_portfolio_state_missing"}
+        try:
+            portfolio_state = PortfolioState.model_validate(raw)
+            action = self.portfolio_adapter.decide(portfolio_state)
+        except (TypeError, ValueError) as exc:
+            return {"failure_reason": f"v6_portfolio_failure:{type(exc).__name__}"}
+
+        symbol = state["symbol"]
+        if (
+            not action.shadow_mode
+            and (
+                symbol in action.blacklisted_assets
+                or action.weight_for(symbol) <= 0.0
+            )
+        ):
+            return {
+                "portfolio_action": action,
+                "failure_reason": "v6_portfolio_gate_no_trade",
+            }
+        return {"portfolio_action": action}
+
+    def after_portfolio(self, state: DecisionState) -> str:
+        return "fail" if state.get("failure_reason") else "dynamic_risk"
+
+    def dynamic_risk_node(self, state: DecisionState) -> dict[str, Any]:
+        if self.dynamic_risk_agent is None:
+            return {}
+        raw = (state.get("adaptive_context") or {}).get("volatility_state")
+        if raw is None:
+            return {"failure_reason": "v6_volatility_state_missing"}
+        try:
+            risk_state = VolatilityRiskState.model_validate(raw)
+            action = self.dynamic_risk_agent.decide(risk_state)
+        except (TypeError, ValueError) as exc:
+            return {"failure_reason": f"v6_dynamic_risk_failure:{type(exc).__name__}"}
+
+        if action.force_no_trade and not action.shadow_mode:
+            return {
+                "dynamic_risk_action": action,
+                "failure_reason": "v6_dynamic_risk_no_trade",
+            }
+
+        if action.shadow_mode:
+            return {"dynamic_risk_action": action}
+
+        market = state["market_context"]
+        features = state["quant_features"]
+        adjusted = self.dynamic_risk_agent.adapt_levels(
+            last_price=float(market["ticker"]["last_price"]),
+            atr=float(features["atr_14"]),
+            minimum_risk_reward=self.risk.s.min_risk_reward,
+            action=action,
+        )
+        return {
+            "dynamic_risk_action": action,
+            "allowed_levels": adjusted,
+        }
+
+    def after_dynamic_risk(self, state: DecisionState) -> str:
         return "fail" if state.get("failure_reason") else "market"
 
     def _base_context(self, state: DecisionState) -> dict[str, Any]:
@@ -60,6 +139,7 @@ class TriConsensusGraph:
             "features": state["quant_features"],
             "ml": state["ml_evidence"],
             "allowed_trade_levels": asdict(state["allowed_levels"]),
+            "v6_adaptive": self._adaptive_payload(state),
             "numeric_rule": (
                 "If proposing LONG or SHORT, use only the exact allowed trade levels. "
                 "Do not calculate or invent alternate prices."
@@ -173,6 +253,12 @@ class TriConsensusGraph:
                 ),
                 market_data_age_ms=int(market["market_data_age_ms"]),
                 side=state["consensus_outcome"],
+                position_weight=(
+                    state["portfolio_action"].weight_for(state["symbol"])
+                    if state.get("portfolio_action") is not None
+                    and not state["portfolio_action"].shadow_mode
+                    else 1.0
+                ),
             )
         )
         return {
@@ -186,6 +272,7 @@ class TriConsensusGraph:
                 "reason": decision.reason,
                 "agents": self._agent_payload(state),
                 "risk": asdict(decision),
+                "v6_adaptive": self._adaptive_payload(state),
             }
         }
 
@@ -199,6 +286,7 @@ class TriConsensusGraph:
                 "reason": state.get("consensus_reason", "consensus_rejected"),
                 "agents": self._agent_payload(state),
                 "risk": None,
+                "v6_adaptive": self._adaptive_payload(state),
             }
         }
 
@@ -212,6 +300,7 @@ class TriConsensusGraph:
                 "reason": state.get("failure_reason", "unknown_graph_failure"),
                 "agents": self._agent_payload(state),
                 "risk": None,
+                "v6_adaptive": self._adaptive_payload(state),
             }
         }
 
@@ -226,9 +315,20 @@ class TriConsensusGraph:
             payload["critic"] = state["critic"].model_dump()
         return payload
 
+    @staticmethod
+    def _adaptive_payload(state: DecisionState) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if state.get("portfolio_action") is not None:
+            payload["portfolio"] = state["portfolio_action"].model_dump()
+        if state.get("dynamic_risk_action") is not None:
+            payload["dynamic_risk"] = state["dynamic_risk_action"].model_dump()
+        return payload
+
     def _build(self):
         builder = StateGraph(DecisionState)
         builder.add_node("precheck", self.precheck_node)
+        builder.add_node("portfolio", self.portfolio_node)
+        builder.add_node("dynamic_risk", self.dynamic_risk_node)
         builder.add_node("market", self.market_node)
         builder.add_node("strategist", self.strategist_node)
         builder.add_node("critic", self.critic_node)
@@ -241,6 +341,16 @@ class TriConsensusGraph:
         builder.add_conditional_edges(
             "precheck",
             self.after_precheck,
+            {"portfolio": "portfolio", "fail": "fail"},
+        )
+        builder.add_conditional_edges(
+            "portfolio",
+            self.after_portfolio,
+            {"dynamic_risk": "dynamic_risk", "fail": "fail"},
+        )
+        builder.add_conditional_edges(
+            "dynamic_risk",
+            self.after_dynamic_risk,
             {"market": "market", "fail": "fail"},
         )
         builder.add_conditional_edges(
