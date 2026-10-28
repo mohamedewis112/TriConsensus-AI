@@ -4,6 +4,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 import hashlib
 import json
+import math
 
 import pandas as pd
 
@@ -30,6 +31,10 @@ from .v51_forward import (
     build_v51_strategy_evidence,
 )
 from .risk import DeterministicRiskEngine
+from .v6_agents import DynamicVolatilityRiskAgent, MetaRLPortfolioAdapterAgent
+from .v6_marl import MAPPOPolicyBundle, MARLDependencyError
+from .v6_models import RewardMemoryRecord, VolatilityRiskState
+from .v6_reward import build_portfolio_state
 
 
 def _frame(candles: list[dict]) -> pd.DataFrame:
@@ -41,6 +46,9 @@ def _checksum(payload: dict) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+V6_PAPER_EXPERIMENT_VERSION = "V6-PAPER-SHADOW"
+
+
 class PaperDecisionCycle:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -48,9 +56,48 @@ class PaperDecisionCycle:
         self.strategy_context = BinanceGlobalRatioClient()
         self.repo = SupabaseRepository(settings)
         self.agents = AgentService(OpenRouterProvider(settings))
+
+        self.v6_policy = None
+        self.portfolio_adapter = None
+        self.dynamic_risk_agent = None
+        if settings.v6_marl_enabled:
+            self.v6_policy = MAPPOPolicyBundle(
+                portfolio_input_dim=15,
+                risk_input_dim=8,
+                global_state_dim=23,
+            )
+            try:
+                policy_row = self.repo.latest_marl_policy("mappo_shared")
+                if policy_row and policy_row.get("weights"):
+                    self.v6_policy.load_payload(
+                        policy_row["weights"],
+                        policy_version=str(policy_row["version"]),
+                    )
+            except (PersistenceFailure, MARLDependencyError, ValueError, KeyError):
+                # Shadow mode is allowed to continue with a neutral/untrained policy.
+                # Enforcement will fail closed inside the adaptive agents.
+                pass
+
+            self.portfolio_adapter = MetaRLPortfolioAdapterAgent(
+                self.v6_policy,
+                shadow_mode=settings.v6_marl_shadow_mode,
+                blacklist_probability=settings.v6_blacklist_probability,
+                minimum_blacklist_samples=settings.v6_min_blacklist_samples,
+                hard_losing_streak=settings.v6_hard_losing_streak,
+                hard_mean_net_return=settings.v6_hard_mean_net_return,
+            )
+            self.dynamic_risk_agent = DynamicVolatilityRiskAgent(
+                self.v6_policy,
+                shadow_mode=settings.v6_marl_shadow_mode,
+                max_microstructure_age_ms=settings.v6_max_microstructure_age_ms,
+                adverse_imbalance=settings.v6_adverse_orderbook_imbalance,
+            )
+
         self.orchestrator = DecisionOrchestrator(
             self.agents,
             DeterministicRiskEngine(settings),
+            portfolio_adapter=self.portfolio_adapter,
+            dynamic_risk_agent=self.dynamic_risk_agent,
         )
         self.execution = PaperExecutionEngine()
 
@@ -86,6 +133,21 @@ class PaperDecisionCycle:
             "strategy_round_trip_research_cost": 0.0015,
             "paper_exit_policy": "agent_levels_plus_deterministic_risk_engine",
             "mode": "paper",
+            **(
+                {
+                    "adaptive_layer": {
+                        "version": "V6",
+                        "architecture": "constrained_mappo_neuro_symbolic",
+                        "shadow_mode": self.settings.v6_marl_shadow_mode,
+                        "reward_window": self.settings.v6_reward_window,
+                        "warmup_trades_per_asset": self.settings.v6_min_warmup_trades_per_asset,
+                        "drawdown_penalty": self.settings.v6_drawdown_penalty,
+                        "risk_engine_authority": "deterministic_veto_supreme",
+                    }
+                }
+                if self.settings.v6_marl_enabled
+                else {}
+            ),
         }
 
     async def run(self, symbol: str) -> dict:
@@ -96,7 +158,11 @@ class PaperDecisionCycle:
         display_symbol = symbol_map[normalized]
 
         experiment = self.repo.ensure_experiment(
-            version=PAPER_EXPERIMENT_VERSION,
+            version=(
+                V6_PAPER_EXPERIMENT_VERSION
+                if self.settings.v6_marl_enabled
+                else PAPER_EXPERIMENT_VERSION
+            ),
             config=self.experiment_config(),
         )
         ledger = self.repo.list_trades(experiment["id"], limit=1000)
@@ -275,6 +341,106 @@ class PaperDecisionCycle:
             min_risk_reward=self.settings.min_risk_reward,
         )
 
+        adaptive_context: dict = {}
+        if self.settings.v6_marl_enabled:
+            reward_records: list[RewardMemoryRecord] = []
+            try:
+                for row in self.repo.recent_marl_reward_memory(
+                    limit=self.settings.v6_reward_window * 2
+                ):
+                    reward_records.append(
+                        RewardMemoryRecord(
+                            symbol=row["symbol"],
+                            trade_id=str(row["trade_id"]),
+                            policy_version=str(row["policy_version"]),
+                            state=row.get("state_json") or {},
+                            action=row.get("action_json") or {},
+                            net_return=float(row["net_return"]),
+                            max_drawdown=float(row["max_drawdown"]),
+                            reward=float(row["reward"]),
+                            terminal=bool(row.get("terminal", True)),
+                            created_at=row.get("created_at"),
+                        )
+                    )
+            except (PersistenceFailure, KeyError, TypeError, ValueError):
+                reward_records = []
+
+            portfolio_state = build_portfolio_state(
+                reward_records,
+                window=self.settings.v6_reward_window,
+                minimum_warmup_trades_per_asset=(
+                    self.settings.v6_min_warmup_trades_per_asset
+                ),
+                as_of=observed_at,
+            )
+
+            implied_volatility = None
+            try:
+                iv_snapshot = await self.market.implied_volatility(normalized)
+                implied_volatility = float(iv_snapshot["mark_iv"])
+            except (MarketDataFailure, KeyError, TypeError, ValueError):
+                iv_snapshot = None
+
+            bybit_imbalance = float(snapshot["orderbook"]["imbalance"])
+            binance_imbalance = None
+            microstructure_age_ms = None
+            try:
+                micro_rows = self.repo.recent_v6_microstructure(
+                    symbol=display_symbol,
+                    limit=20,
+                )
+                latest_by_venue: dict[str, dict] = {}
+                for row in micro_rows:
+                    latest_by_venue[str(row["venue"]).lower()] = row
+                bybit_row = latest_by_venue.get("bybit")
+                binance_row = latest_by_venue.get("binance")
+                if bybit_row is not None:
+                    bybit_imbalance = float(bybit_row["imbalance"])
+                if binance_row is not None:
+                    binance_imbalance = float(binance_row["imbalance"])
+                if bybit_row is not None and binance_row is not None:
+                    latest_capture = min(
+                        datetime.fromisoformat(
+                            str(bybit_row["captured_at"]).replace("Z", "+00:00")
+                        ),
+                        datetime.fromisoformat(
+                            str(binance_row["captured_at"]).replace("Z", "+00:00")
+                        ),
+                    )
+                    microstructure_age_ms = max(
+                        0,
+                        int((observed_at - latest_capture).total_seconds() * 1000),
+                    )
+            except (PersistenceFailure, KeyError, TypeError, ValueError):
+                pass
+
+            # build_features stores a 20-bar scaled volatility. Convert it back
+            # to 15m sigma then annualize before comparing it with option IV.
+            realized_annualized = float(primary["realized_vol_20"]) * math.sqrt(
+                (365 * 24 * 4) / 20
+            )
+            volatility_state = VolatilityRiskState(
+                symbol=display_symbol,
+                side=live_signal.signal,
+                entry_price=float(snapshot["ticker"]["last_price"]),
+                atr_14=float(primary["atr_14"]),
+                realized_volatility=max(0.0, realized_annualized),
+                implied_volatility=implied_volatility,
+                bybit_orderbook_imbalance=bybit_imbalance,
+                binance_orderbook_imbalance=binance_imbalance,
+                spread_bps=float(primary.get("spread_bps") or 0),
+                market_regime=(
+                    f"{primary.get('trend', 'unknown')}|"
+                    f"adx={float(primary.get('adx_14') or 0):.2f}"
+                ),
+                microstructure_age_ms=microstructure_age_ms,
+            )
+            adaptive_context = {
+                "portfolio_state": portfolio_state.model_dump(mode="json"),
+                "volatility_state": volatility_state.model_dump(mode="json"),
+                "iv_snapshot": iv_snapshot,
+            }
+
         feature_row = self.repo.insert(
             "feature_snapshots",
             {
@@ -310,6 +476,7 @@ class PaperDecisionCycle:
             ml_evidence=strategy_evidence,
             account_state=account_state,
             allowed_levels=allowed_levels,
+            adaptive_context=adaptive_context,
         )
 
         agent_ids: dict[str, str] = {}
@@ -387,6 +554,7 @@ class PaperDecisionCycle:
                         "numeric_levels_validated": True,
                         "full_consensus": full_consensus,
                         "account_state": account_state,
+                        "v6_adaptive": result.get("v6_adaptive") or {},
                     },
                     "proposed_entry": entry,
                     "stop_loss": proposal["stop_loss"],
@@ -403,6 +571,38 @@ class PaperDecisionCycle:
                     ),
                 },
             )
+
+        if self.settings.v6_marl_enabled:
+            try:
+                for role, action in (result.get("v6_adaptive") or {}).items():
+                    self.repo.insert(
+                        "marl_action_logs",
+                        {
+                            "experiment_id": experiment["id"],
+                            "market_snapshot_id": market_row["id"],
+                            "signal_snapshot_id": strategy_signal_row["id"],
+                            "agent_role": role,
+                            "policy_version": str(
+                                action.get("policy_version") or "unknown"
+                            ),
+                            "state_json": adaptive_context,
+                            "action_json": action,
+                            "projected_action_json": action,
+                            "shadow_mode": bool(action.get("shadow_mode", True)),
+                            "vetoed_by_risk": bool(
+                                result.get("risk")
+                                and not result["risk"].get("approved", False)
+                            ),
+                        },
+                    )
+            except PersistenceFailure:
+                if not self.settings.v6_marl_shadow_mode:
+                    return {
+                        "outcome": "NO_TRADE",
+                        "reason": "v6_adaptive_audit_failure",
+                        "experiment_id": experiment["id"],
+                        "strategy_signal_snapshot_id": strategy_signal_row["id"],
+                    }
 
         if result["outcome"] == "NO_TRADE":
             return {
@@ -471,6 +671,7 @@ class PaperDecisionCycle:
                 "payload": {
                     **asdict(fill),
                     "account_state_at_entry": account_state,
+                    "v6_adaptive": result.get("v6_adaptive") or {},
                 },
             },
         )
