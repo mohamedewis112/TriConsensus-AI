@@ -92,7 +92,8 @@
       "purpose": "Cross-venue order-book evidence with exchange millisecond timestamps.",
       "primary_key": "id bigserial",
       "unique": [
-        "venue, symbol, exchange_timestamp_ms, sequence"
+        "venue, symbol, exchange_timestamp_ms, sequence",
+        "checksum"
       ],
       "fields": {
         "symbol": "BTC/USDT | ETH/USDT",
