@@ -132,6 +132,30 @@
         "payload": "jsonb",
         "created_at": "timestamptz"
       }
+    },
+    "v6_microstructure_latest": {
+      "primary_key": [
+        "venue",
+        "symbol"
+      ],
+      "rls": true,
+      "mutable_latest_state": true,
+      "public_access": false,
+      "columns": {
+        "symbol": "enum(BTC/USDT,ETH/USDT)",
+        "venue": "enum(bybit,binance)",
+        "captured_at": "timestamptz",
+        "exchange_timestamp_ms": "bigint",
+        "received_timestamp_ms": "bigint",
+        "sequence": "bigint|null",
+        "bid_depth": "numeric>=0",
+        "ask_depth": "numeric>=0",
+        "imbalance": "numeric[-1,1]",
+        "spread_bps": "numeric>=0",
+        "payload": "jsonb",
+        "checksum": "text",
+        "updated_at": "timestamptz"
+      }
     }
   },
   "queue": {
