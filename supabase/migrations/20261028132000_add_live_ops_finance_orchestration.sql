@@ -163,6 +163,24 @@ begin
       'paper', jsonb_build_object(
         'starting_balance', 10000.0,
         'realized_pnl', coalesce((select sum(pnl_net)::float8 from public.paper_trades where status='closed'),0),
+        'unrealized_pnl', coalesce((
+          select sum(
+            case
+              when upper(t.side)='LONG' then (p.last_price - coalesce(t.actual_entry,t.requested_entry,0)::float8) * coalesce(t.position_size,0)::float8
+              when upper(t.side)='SHORT' then (coalesce(t.actual_entry,t.requested_entry,0)::float8 - p.last_price) * coalesce(t.position_size,0)::float8
+              else 0
+            end
+          )
+          from public.paper_trades t
+          cross join lateral (
+            select c.close_price::float8 as last_price
+            from public.market_candles_15m c
+            where replace(replace(upper(c.symbol),'/',''),'-','') = replace(replace(upper(t.symbol),'/',''),'-','')
+            order by c.open_time desc
+            limit 1
+          ) p
+          where t.status='open'
+        ),0),
         'fees', coalesce((select sum(coalesce(realized_fees,estimated_fees,0))::float8 from public.paper_trades),0),
         'open_positions', (select count(*) from public.paper_trades where status='open'),
         'closed_trades', (select count(*) from public.paper_trades where status='closed'),
