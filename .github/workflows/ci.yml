@@ -51,31 +51,3 @@ jobs:
         run: npm run build
 
 
-
-  v5-third-window-final:
-    if: github.ref == 'refs/heads/feat/v1-foundation' || github.event_name == 'pull_request'
-    strategy:
-      fail-fast: false
-      matrix:
-        symbol: [BTCUSDT, ETHUSDT]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install V5 dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install "httpx>=0.28,<1" "pydantic>=2.10,<3" "pydantic-settings>=2.7,<3" "numpy>=2.1,<3" "pandas>=2.2,<4"
-      - name: Run untouched third-window V5 screen
-        env:
-          PYTHONPATH: backend
-        run: |
-          python -m triconsensus.cross_venue_evidence             --symbol "${{ matrix.symbol }}"             --days 90             --end-date "2023-11-30"             --output-dir "v5-third/${{ matrix.symbol }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: "v5-third-${{ matrix.symbol }}-${{ github.run_id }}"
-          path: "v5-third/${{ matrix.symbol }}"
-          if-no-files-found: error
-          retention-days: 30
