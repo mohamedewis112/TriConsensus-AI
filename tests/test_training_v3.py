@@ -87,3 +87,22 @@ def test_v3_dataset_schema_and_chronology():
     assert list(ds.x.columns) == V3_FEATURE_COLUMNS
     assert ds.timestamps == sorted(ds.timestamps)
     assert len(ds.x) >= 300
+
+
+def test_trade_path_outcome_exposes_exit_index_and_gross_net():
+    from triconsensus.training_v3 import trade_path_outcome
+
+    candles = synthetic_candles(30)
+    outcome = trade_path_outcome(
+        candles,
+        index=5,
+        side=1,
+        atr=1.0,
+        horizon=4,
+        round_trip_cost=0.0015,
+    )
+    assert 6 <= outcome.exit_index <= 9
+    assert outcome.net_return == pytest.approx(
+        outcome.gross_return - 0.0015
+    )
+    assert outcome.exit_reason in {"STOP", "TARGET", "TIME"}
