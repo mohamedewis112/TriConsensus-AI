@@ -10,7 +10,10 @@ export default async function LiveMarket() {
   return (
     <div className="page">
       <header className="topbar">
-        <div><p className="eyebrow">BYBIT · LINEAR PERPETUAL</p><h1>Live Market</h1></div>
+        <div>
+          <p className="eyebrow">BYBIT + BINANCE · SUPABASE COLLECTOR</p>
+          <h1>Live Market Evidence</h1>
+        </div>
       </header>
       {markets.map(([name, market]) => (
         <section className="panel chartPanel" key={name}>
@@ -22,12 +25,17 @@ export default async function LiveMarket() {
             {market && (
               <div className="microStats">
                 <span>OI {market.ticker.open_interest.toLocaleString()}</span>
-                <span>Spread {market.orderbook.spread_bps.toFixed(2)} bps</span>
-                <span>Book {(market.orderbook.imbalance * 100).toFixed(1)}%</span>
+                <span>Funding {(market.ticker.funding_rate * 100).toFixed(4)}%</span>
+                <span>L/S Ratio {market.latest_ratio.toFixed(3)}</span>
+                <span>Age {Math.round(market.market_data_age_ms / 1000)}s</span>
               </div>
             )}
           </div>
-          {market ? <MarketChart candles={market.candles["15m"] ?? []} /> : <div className="emptyChart">No market data.</div>}
+          {market ? (
+            <MarketChart candles={market.candles["15m"] ?? []} />
+          ) : (
+            <div className="emptyChart">No collector data.</div>
+          )}
         </section>
       ))}
     </div>
