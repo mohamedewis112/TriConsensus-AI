@@ -1,0 +1,82 @@
+import math
+
+from triconsensus.regimes import (
+    RegimeThresholds,
+    bootstrap_lcb,
+    classify_regime,
+    chronological_fold_ids,
+    fit_regime_thresholds,
+    summarize_regime,
+)
+
+
+def base_features():
+    return {
+        "close": 100.0,
+        "ema_20": 103.0,
+        "ema_50": 99.0,
+        "atr_14": 2.0,
+        "adx_14": 30.0,
+        "realized_vol_20": 0.02,
+        "macd_hist": 0.5,
+        "roc_10": 0.01,
+    }
+
+
+def test_regime_classifier_combines_trend_volatility_and_momentum():
+    state = classify_regime(
+        base_features(),
+        RegimeThresholds(low_vol=0.01, high_vol=0.03),
+    )
+    assert state.trend == "trend_up"
+    assert state.volatility == "mid_vol"
+    assert state.momentum == "momentum_up"
+    assert state.key == "trend_up|mid_vol|momentum_up"
+
+
+def test_range_is_not_forced_into_trend():
+    features = base_features()
+    features["ema_20"] = 100.1
+    features["ema_50"] = 100.0
+    features["adx_14"] = 14
+    state = classify_regime(
+        features,
+        RegimeThresholds(low_vol=0.01, high_vol=0.03),
+    )
+    assert state.trend == "range"
+
+
+def test_volatility_thresholds_are_data_driven():
+    thresholds = fit_regime_thresholds([0.001 + i * 0.001 for i in range(100)])
+    assert thresholds.low_vol < thresholds.high_vol
+    assert 0.02 < thresholds.low_vol < 0.05
+    assert 0.05 < thresholds.high_vol < 0.09
+
+
+def test_chronological_folds_preserve_time_order():
+    ids = chronological_fold_ids(10, 4)
+    assert ids == sorted(ids)
+    assert set(ids) == {0, 1, 2, 3}
+
+
+def test_regime_gate_requires_stability_not_one_lucky_fold():
+    values = [0.002] * 10 + [-0.004] * 10 + [0.002] * 10 + [0.002] * 10
+    folds = [0] * 10 + [1] * 10 + [2] * 10 + [3] * 10
+    stats = summarize_regime("x", "LONG", values, folds)
+    assert stats.profitable_folds == 3
+    assert stats.qualified is False
+
+
+def test_regime_gate_can_qualify_repeated_positive_edge():
+    values = [0.001 + 0.0001 * math.sin(i) for i in range(80)]
+    folds = chronological_fold_ids(len(values), 4)
+    stats = summarize_regime("x", "LONG", values, folds)
+    assert stats.trades == 80
+    assert stats.profitable_folds == 4
+    assert stats.bootstrap_lcb_95 > 0
+    assert stats.qualified is True
+
+
+def test_bootstrap_lcb_is_deterministic():
+    values = [0.001, 0.002, 0.003, 0.004] * 20
+    assert bootstrap_lcb(values) == bootstrap_lcb(values)
