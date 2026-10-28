@@ -11,6 +11,10 @@ on:
         description: "Archive end date (YYYY-MM-DD)"
         required: true
         default: "2026-08-11"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "research-trigger/v4-final.txt"
 
 permissions:
   contents: read
