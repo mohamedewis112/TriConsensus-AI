@@ -197,6 +197,41 @@ class SupabaseRepository:
             raise PersistenceFailure(f"marl reward memory read failed: {exc}") from exc
         return list(reversed(rows or []))
 
+    def dequeue_marl_rewards(
+        self,
+        *,
+        visibility_timeout: int = 300,
+        quantity: int = 32,
+    ) -> list[dict]:
+        try:
+            rows = (
+                self.client.rpc(
+                    "v6_dequeue_marl_rewards",
+                    {"p_vt": visibility_timeout, "p_qty": quantity},
+                )
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"MARL reward dequeue failed: {exc}") from exc
+        return rows or []
+
+    def archive_marl_reward(self, msg_id: int) -> bool:
+        try:
+            result = (
+                self.client.rpc(
+                    "v6_archive_marl_reward",
+                    {"p_msg_id": int(msg_id)},
+                )
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"MARL reward archive failed: {exc}") from exc
+        if isinstance(result, list):
+            return bool(result[0]) if result else False
+        return bool(result)
+
     def latest_marl_policy(self, agent_role: str) -> dict | None:
         try:
             rows = (
