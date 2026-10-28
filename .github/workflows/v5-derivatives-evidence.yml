@@ -1,10 +1,7 @@
 name: V5 Derivatives Evidence Screen
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v5-derivatives-evidence.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
