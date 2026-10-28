@@ -143,7 +143,7 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
 
   const eth = data?.latest_signals?.find((s) => s.symbol === "ETH/USDT");
   const btc = data?.latest_signals?.find((s) => s.symbol === "BTC/USDT");
-  const candidate = [btc, eth].find((s) => s && s.signal !== "NO_TRADE");
+  const candidates = [btc, eth].filter((s) => s && s.signal !== "NO_TRADE");
   const alerts = (data?.events ?? []).filter((event) => {
     const state = String(event.state ?? "").toUpperCase();
     return ["BLOCKED", "FAILED", "VETO", "UNHEALTHY", "LOSS"].includes(state);
@@ -168,12 +168,16 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
 
       {lastError && <section className="notice">Live refresh failed closed: {lastError}</section>}
 
-      {candidate && (
+      {candidates.length > 0 && (
         <section className="candidateBanner">
           <div>
-            <span className="label">ACTIVE PROSPECTIVE CANDIDATE</span>
-            <strong>{candidate.symbol} · {candidate.signal}</strong>
-            <small>Context {new Date(candidate.context_timestamp).toLocaleString()} · feature {Number(candidate.feature_value).toFixed(5)}</small>
+            <span className="label">ACTIVE PROSPECTIVE CANDIDATES</span>
+            {candidates.map((candidate) => (
+              <div className="candidateLine" key={candidate!.symbol}>
+                <strong>{candidate!.symbol} · {candidate!.signal}</strong>
+                <small>Context {new Date(candidate!.context_timestamp).toLocaleString()} · feature {Number(candidate!.feature_value).toFixed(5)}</small>
+              </div>
+            ))}
           </div>
           <div className="candidateState">
             <span>Agent runtime</span>
