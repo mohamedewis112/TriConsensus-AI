@@ -165,6 +165,7 @@ class MetaRLPortfolioAdapterAgent:
             reason="mappo_projected_inside_deterministic_risk_envelope",
             shadow_mode=self.shadow_mode,
             policy_log_prob=policy_log_prob,
+            policy_action=[float(value) for value in raw],
         )
 
 
@@ -275,6 +276,7 @@ class DynamicVolatilityRiskAgent:
             reason=";".join(reasons),
             shadow_mode=self.shadow_mode,
             policy_log_prob=action.policy_log_prob,
+            policy_action=action.policy_action,
         )
 
     def decide(self, state: VolatilityRiskState) -> DynamicRiskAction:
@@ -318,6 +320,7 @@ class DynamicVolatilityRiskAgent:
             reason="mappo_raw_action",
             shadow_mode=self.shadow_mode,
             policy_log_prob=policy_log_prob,
+            policy_action=[float(value) for value in raw],
         )
         return self._symbolic_projection(state, neural)
 
