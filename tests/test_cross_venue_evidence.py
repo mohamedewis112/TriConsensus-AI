@@ -38,7 +38,7 @@ def test_metrics_bucket_end_labels_into_15m_candle():
 
 
 def test_cross_venue_frame_builds_features_and_coverage():
-    base = 1_700_000_000_000
+    base = 1_699_999_200_000
     candles = []
     metrics = []
     for i in range(180):
