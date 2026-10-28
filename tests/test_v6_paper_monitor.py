@@ -5,8 +5,10 @@ import pytest
 from triconsensus.paper_monitor import (
     evaluate_exit,
     horizon_expired,
+    project_live_levels,
     update_excursions,
 )
+from triconsensus.v6_models import DynamicRiskAction
 
 
 def trade(**overrides):
@@ -71,3 +73,60 @@ def test_v6_horizon_does_not_close_early():
     now = datetime(2026, 10, 28, 16, 14, 59, tzinfo=UTC)
     opened = (now - timedelta(minutes=179, seconds=59)).isoformat()
     assert horizon_expired(opened, now, horizon_minutes=180) is False
+
+
+def live_action(*, stop_atr: float, rr: float) -> DynamicRiskAction:
+    return DynamicRiskAction(
+        stop_atr_multiplier=stop_atr,
+        reward_to_risk_multiplier=rr,
+        trailing_lock_fraction=0.35,
+        policy_version="test",
+        reason="test",
+        shadow_mode=False,
+    )
+
+
+def test_live_long_projection_can_tighten_but_never_widen_loss():
+    row = trade(stop_loss=98.0, take_profit_1=104.0)
+    stop, tp = project_live_levels(
+        row,
+        atr=1.0,
+        action=live_action(stop_atr=1.0, rr=1.0),
+        minimum_risk_reward=1.5,
+    )
+    assert stop == pytest.approx(99.0)
+    assert tp == pytest.approx(101.5)
+
+    wider_stop, farther_tp = project_live_levels(
+        {**row, "stop_loss": stop, "take_profit_1": tp},
+        atr=5.0,
+        action=live_action(stop_atr=2.0, rr=1.5),
+        minimum_risk_reward=1.5,
+    )
+    assert wider_stop == pytest.approx(99.0)
+    assert farther_tp == pytest.approx(101.5)
+
+
+def test_live_short_projection_can_tighten_but_never_widen_loss():
+    row = trade(
+        side="SHORT",
+        stop_loss=102.0,
+        take_profit_1=96.0,
+    )
+    stop, tp = project_live_levels(
+        row,
+        atr=1.0,
+        action=live_action(stop_atr=1.0, rr=1.0),
+        minimum_risk_reward=1.5,
+    )
+    assert stop == pytest.approx(101.0)
+    assert tp == pytest.approx(98.5)
+
+    wider_stop, farther_tp = project_live_levels(
+        {**row, "stop_loss": stop, "take_profit_1": tp},
+        atr=5.0,
+        action=live_action(stop_atr=2.0, rr=1.5),
+        minimum_risk_reward=1.5,
+    )
+    assert wider_stop == pytest.approx(101.0)
+    assert farther_tp == pytest.approx(98.5)
