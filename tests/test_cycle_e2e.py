@@ -154,8 +154,8 @@ class FakeMarket:
 
 class ApprovingAgents:
     async def market_intelligence(self, context):
-        assert context["ml_evidence"]["model_family"] == V51_MODEL_FAMILY
-        assert context["ml_evidence"]["signal"] == "LONG"
+        assert context["ml"]["model_family"] == V51_MODEL_FAMILY
+        assert context["ml"]["signal"] == "LONG"
         return MarketIntel(
             market_regime="trend",
             bias=Bias.BULLISH,
