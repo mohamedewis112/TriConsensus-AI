@@ -1,0 +1,1 @@
+V4.1 frozen setups reevaluated with max_open_trades=1 and cost sensitivity.
