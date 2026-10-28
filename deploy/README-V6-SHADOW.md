@@ -69,3 +69,20 @@ It collects:
 - Bybit front-expiry near-ATM option mark IV for BTC/ETH every `V6_IV_POLL_SECONDS`
 
 The collector has **no trading authority** and refuses to start if V6 enforcement is enabled. It requires only `SUPABASE_SERVICE_ROLE_KEY` as a runtime secret.
+
+
+## Supabase shadow action observer
+
+While a dedicated Python/Torch runtime is unavailable, Supabase also runs an observation-only layer:
+
+- Edge Function: `v6-shadow-observer`
+- Cron: `:12/:27/:42/:57` UTC, one minute after the V5.1 recorder cadence
+- Reads only recent frozen V5.1 LONG/SHORT signals
+- Builds warm-up portfolio state from immutable reward memory
+- Applies the same symbolic Dynamic Risk baseline/projection used before MAPPO is ready
+- Writes only `marl_action_logs`
+- Never opens/closes paper trades and never writes reward memory
+- Never invokes an LLM
+- Stops automatically if an active `mappo_shared` policy appears, because neural inference then belongs to the Python/Torch runtime
+
+The observer is authenticated with a separate random token stored in Supabase Vault. Its action rows are shadow observations only and cannot alter the frozen V5.1 protocol or deterministic risk authority.
