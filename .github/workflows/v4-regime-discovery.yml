@@ -28,9 +28,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Resolve V4 research window
+        id: window
+        shell: bash
+        run: |
+          DAYS="${{ inputs.days }}"
+          END_DATE="${{ inputs.end_date }}"
+          if [ -z "$DAYS" ]; then DAYS="90"; fi
+          if [ -z "$END_DATE" ]; then END_DATE="2026-08-11"; fi
+          echo "days=$DAYS" >> "$GITHUB_OUTPUT"
+          echo "end_date=$END_DATE" >> "$GITHUB_OUTPUT"
 
       - name: Install regime research dependencies
         run: |
@@ -41,7 +53,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days "${{ inputs.days }}"             --end-date "${{ inputs.end_date }}"             --output-dir "v4-regime/${{ matrix.symbol }}"
+          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days "${{ steps.window.outputs.days }}"             --end-date "${{ steps.window.outputs.end_date }}"             --output-dir "v4-regime/${{ matrix.symbol }}"
 
       - uses: actions/upload-artifact@v4
         with:
