@@ -1,10 +1,16 @@
 name: V4 Regime Discovery
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v4-regime.txt"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Completed Bybit archive days"
+        required: true
+        default: "90"
+      end_date:
+        description: "Archive end date (YYYY-MM-DD)"
+        required: true
+        default: "2026-08-11"
 
 permissions:
   contents: read
@@ -31,7 +37,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days 90             --end-date 2026-08-11             --output-dir "v4-regime/${{ matrix.symbol }}"
+          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days "${{ inputs.days }}"             --end-date "${{ inputs.end_date }}"             --output-dir "v4-regime/${{ matrix.symbol }}"
 
       - uses: actions/upload-artifact@v4
         with:
