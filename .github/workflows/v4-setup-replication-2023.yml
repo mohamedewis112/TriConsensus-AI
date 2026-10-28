@@ -1,10 +1,7 @@
 name: V4.1 Frozen Setup Replication 2023
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v4-setups-2023.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
