@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .agents import AgentService
 from .config import settings
+from .consensus import full_consensus
 from .cycle import PaperDecisionCycle, V6_PAPER_EXPERIMENT_VERSION
 from .db import PersistenceFailure, SupabaseRepository
 from .llm import LLMFailure, build_llm_provider
@@ -92,6 +94,66 @@ async def model_smoke(request: Request) -> dict:
         "structured_output": result.model_dump(),
         "paper_only": True,
         "live_trading": False,
+    }
+
+
+@app.get("/v1/agent-smoke")
+async def agent_smoke(request: Request) -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    agents = AgentService(
+        build_llm_provider(settings, vercel_oidc_token=oidc_token)
+    )
+    try:
+        market_result = await agents.market_intelligence(
+            {
+                "scenario": "synthetic connectivity test only",
+                "live_market_data": False,
+                "evidence": [
+                    "No live market prices were supplied.",
+                    "No actionable quantitative edge was supplied.",
+                ],
+                "instruction": "Treat evidence as insufficient and return NEUTRAL.",
+            }
+        )
+        proposal_result = await agents.strategist(
+            {
+                "scenario": "synthetic connectivity test only",
+                "live_market_data": False,
+                "market_intelligence": market_result.model_dump(mode="json"),
+                "allowed_trade_levels": {},
+                "instruction": "Choose WAIT because no approved numeric levels exist.",
+            }
+        )
+        critic_result = await agents.risk_advocate(
+            {
+                "scenario": "synthetic connectivity test only",
+                "live_market_data": False,
+                "market_intelligence": market_result.model_dump(mode="json"),
+                "proposal": proposal_result.model_dump(mode="json"),
+                "instruction": "VETO any actionable position because this is a synthetic test.",
+            }
+        )
+    except LLMFailure as exc:
+        raise HTTPException(status_code=503, detail=f"AGENTS_UNAVAILABLE: {exc}") from exc
+
+    consensus = full_consensus(market_result, proposal_result, critic_result)
+    return {
+        "provider": settings.llm_provider,
+        "model": (
+            settings.vercel_ai_gateway_model
+            if settings.llm_provider == "vercel_ai_gateway"
+            else settings.model_id
+        ),
+        "market_intelligence": market_result.model_dump(mode="json"),
+        "strategist": proposal_result.model_dump(mode="json"),
+        "risk_advocate": critic_result.model_dump(mode="json"),
+        "consensus": consensus.model_dump(mode="json"),
+        "synthetic_only": True,
+        "paper_only": True,
+        "live_trading": False,
+        "persisted": False,
     }
 
 
