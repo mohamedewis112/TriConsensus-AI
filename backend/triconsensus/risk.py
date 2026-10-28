@@ -25,6 +25,7 @@ class RiskInput:
     realized_volatility_20: float
     market_data_age_ms: int
     side: str
+    position_weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -94,7 +95,12 @@ class DeterministicRiskEngine:
         if rr < self.s.min_risk_reward:
             return RiskDecision(False, "risk_reward_below_threshold", risk_reward=rr)
 
-        risk_budget = x.equity * self.s.risk_per_trade
+        if not 0.0 <= x.position_weight <= 1.0:
+            return RiskDecision(False, "adaptive_weight_out_of_bounds")
+        if x.position_weight == 0.0:
+            return RiskDecision(False, "adaptive_weight_zero")
+
+        risk_budget = x.equity * self.s.risk_per_trade * x.position_weight
         unit_risk = stop_distance + (x.entry * (x.slippage_bps / 10_000.0))
         if unit_risk <= 0:
             return RiskDecision(False, "invalid_unit_risk")
