@@ -247,9 +247,9 @@ class BybitKlineArchiveClient:
                 for key in sorted(candles_by_start)
             ]
             quality = archive_coverage_stats(candles, requested_days=days)
-            if quality["coverage_ratio"] < 0.90:
+            if quality["coverage_ratio"] < 0.80:
                 raise PublicArchiveFailure(
-                    "MT4 kline coverage too sparse: "
+                    "MT4 kline coverage too sparse even for exploratory research: "
                     f'{quality["coverage_ratio"]:.3f} for {days} requested days'
                 )
             return candles
