@@ -72,6 +72,8 @@ async def run_live_research_cycle(
     *,
     symbol: str,
     vercel_oidc_token: str | None,
+    ledger: list[dict] | None = None,
+    include_persistence_context: bool = False,
 ) -> dict:
     normalized = symbol.upper().replace("-", "").replace("/", "")
     if normalized not in FROZEN_THRESHOLDS:
@@ -169,7 +171,7 @@ async def run_live_research_cycle(
     )
 
     observed_at = datetime.now(UTC)
-    account_state = build_account_state([], settings, now=observed_at)
+    account_state = build_account_state(ledger or [], settings, now=observed_at)
     portfolio_state = build_portfolio_state(
         [],
         window=settings.v6_reward_window,
@@ -263,7 +265,7 @@ async def run_live_research_cycle(
         and risk_approved
     )
 
-    return {
+    response = {
         "symbol": display_symbol,
         "v51_signal": signal_payload,
         "market_snapshot_meta": {
@@ -289,5 +291,22 @@ async def run_live_research_cycle(
         "persisted": False,
         "execution_performed": False,
         "v6_enforcement": False,
+        "provider": "vercel_ai_gateway_oidc",
+        "model_id": settings.vercel_ai_gateway_model,
         "observed_at": observed_at.isoformat(),
     }
+    if include_persistence_context:
+        response["persistence_context"] = {
+            "market_snapshot": snapshot,
+            "feature_snapshot": {
+                "primary": primary,
+                "timeframes": timeframe_features,
+                "allowed_trade_levels": {
+                    "long": allowed_levels.long,
+                    "short": allowed_levels.short,
+                },
+            },
+            "account_state": account_state,
+            "v6_adaptive_context": adaptive_context,
+        }
+    return response
