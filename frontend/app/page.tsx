@@ -5,25 +5,29 @@ export const dynamic = "force-dynamic";
 
 const money = (v: number) =>
   new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"}).format(v);
-const pct = (v: number) => (v * 100).toFixed(2) + "%";
+const pct = (v: number | null | undefined) =>
+  v == null ? "—" : (v * 100).toFixed(3) + "%";
+const num = (v: number | null | undefined) =>
+  v == null || !Number.isFinite(v) ? "—" : v.toFixed(2);
 
 export default async function Dashboard() {
   const [summary, btc] = await Promise.all([getSummary(), getMarket("BTCUSDT")]);
+  const forward = summary?.forward;
 
-  const cards = summary
+  const cards = summary && forward
     ? [
-        ["Paper Balance", money(summary.paper_balance)],
-        ["Net P&L", money(summary.net_pnl)],
-        ["Today's P&L", money(summary.today_pnl)],
-        ["Win Rate", pct(summary.win_rate)],
-        ["Profit Factor", summary.profit_factor?.toFixed(2) ?? "—"],
-        ["Expectancy", money(summary.expectancy)],
-        ["Max Drawdown", pct(summary.max_drawdown)],
-        ["Sharpe", summary.sharpe?.toFixed(2) ?? "—"],
-        ["Sortino", summary.sortino?.toFixed(2) ?? "—"],
-        ["Open Positions", String(summary.open_positions)],
-        ["Closed Trades", String(summary.closed_trades)],
-        ["Losing Streak", String(summary.max_losing_streak)],
+        ["Watchdog", forward.health_status.toUpperCase()],
+        ["BTC Signal", forward.btc_signal],
+        ["ETH Signal", forward.eth_signal],
+        ["BTC OOS Trades", String(forward.btc_trade_count)],
+        ["ETH OOS Trades", String(forward.eth_trade_count)],
+        ["BTC Mean Net", pct(forward.btc_mean_net_return)],
+        ["ETH Mean Net", pct(forward.eth_mean_net_return)],
+        ["BTC Profit Factor", num(forward.btc_profit_factor)],
+        ["ETH Profit Factor", num(forward.eth_profit_factor)],
+        ["Paper Trades", String(forward.paper_trades)],
+        ["Agent Runs", String(forward.agent_runs)],
+        ["Consensus", String(forward.consensus_decisions)],
       ]
     : [];
 
@@ -31,16 +35,16 @@ export default async function Dashboard() {
     <div className="page">
       <header className="topbar">
         <div>
-          <p className="eyebrow">V1 · FORWARD TESTING</p>
+          <p className="eyebrow">V5.1 · FORWARD TESTING</p>
           <h1>Research Terminal</h1>
-          <p className="muted">Evidence first. Full consensus. Deterministic risk.</p>
+          <p className="muted">Frozen protocol. Prospective evidence. Fail closed.</p>
         </div>
         <div className="statusPill"><span className="pulseDot" /> PAPER MODE</div>
       </header>
 
       {!summary && (
         <section className="notice">
-          Backend credentials are not configured yet. No performance data is fabricated.
+          Secure dashboard backend is unavailable. No performance data is fabricated.
         </section>
       )}
 
@@ -56,21 +60,21 @@ export default async function Dashboard() {
       <section className="panel chartPanel">
         <div className="panelHeader">
           <div>
-            <span className="label">BTC / USDT · 15m</span>
+            <span className="label">BTC / USDT · 15m · COLLECTOR</span>
             <strong>{btc ? money(btc.ticker.last_price) : "No live feed"}</strong>
           </div>
           {btc && (
             <div className="microStats">
-              <span>Spread {btc.orderbook.spread_bps.toFixed(2)} bps</span>
-              <span>OB Imbalance {(btc.orderbook.imbalance * 100).toFixed(1)}%</span>
+              <span>OI {btc.ticker.open_interest.toLocaleString()}</span>
               <span>Funding {(btc.ticker.funding_rate * 100).toFixed(4)}%</span>
+              <span>L/S Ratio {btc.latest_ratio.toFixed(3)}</span>
             </div>
           )}
         </div>
         {btc ? (
           <MarketChart candles={btc.candles["15m"] ?? []} />
         ) : (
-          <div className="emptyChart">Awaiting protected Bybit feed.</div>
+          <div className="emptyChart">Awaiting protected market evidence.</div>
         )}
       </section>
 
@@ -78,6 +82,7 @@ export default async function Dashboard() {
         <article className="panel">
           <span className="label">Decision Gate</span>
           <div className="flow">
+            <div>Frozen V5.1 Signal</div><b>→</b>
             <div>Market Intelligence</div><b>→</b>
             <div>Strategist</div><b>→</b>
             <div>Devil&apos;s Advocate</div><b>→</b>
@@ -90,7 +95,8 @@ export default async function Dashboard() {
             <span>Live money</span><strong className="danger">DISABLED</strong>
             <span>Consensus</span><strong>FULL ONLY</strong>
             <span>Failure policy</span><strong>NO TRADE</strong>
-            <span>Max positions</span><strong>1</strong>
+            <span>BTC gate</span><strong>{forward?.btc_gate ?? "UNKNOWN"}</strong>
+            <span>ETH gate</span><strong>{forward?.eth_gate ?? "UNKNOWN"}</strong>
           </div>
         </article>
       </section>
