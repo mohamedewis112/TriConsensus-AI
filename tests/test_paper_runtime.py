@@ -84,7 +84,30 @@ def test_edge_gateway_is_locked_to_exact_vercel_preview_identity():
         "owner:smart-media1:project:triconsensus-runtime-preview:"
         "environment:preview"
     ) in source
+    assert (
+        "owner:smart-media1:project:triconsensus-runtime-preview:"
+        "environment:production"
+    ) in source
     assert 'req.method !== "POST"' in source
     assert "SUPABASE_SERVICE_ROLE_KEY" in source
     assert "paper_only: true" in source
     assert "live_trading: false" in source
+
+
+def test_cron_surface_is_single_and_secured():
+    source = Path("backend/triconsensus/api.py").read_text()
+    assert '@app.get("/v1/runtime/cron")' in source
+    assert '@app.get("/v1/runtime/status")' in source
+    assert '@app.post("/v1/runtime-cycle/' not in source
+    assert '@app.post("/v1/runtime-monitor")' not in source
+    assert "CRON_SECRET" in source
+
+
+def test_secondary_runtime_rpcs_are_disabled():
+    source = Path(
+        "supabase/migrations/20261028223401_disable_secondary_paper_runtime_rpcs.sql"
+    ).read_text()
+    assert "triconsensus_open_paper_trade" in source
+    assert "triconsensus_monitor_paper_trade" in source
+    assert "triconsensus_close_paper_trade" in source
+    assert "from service_role" in source
