@@ -27,6 +27,7 @@ from .training_v3 import trade_path_label
 
 
 SETUP_FEATURE_COLUMNS = (
+    "rsi_14",
     "vwap",
     "support_20",
     "resistance_20",
