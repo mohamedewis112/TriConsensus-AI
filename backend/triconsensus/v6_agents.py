@@ -113,10 +113,11 @@ class MetaRLPortfolioAdapterAgent:
             )
 
         try:
-            raw = np.asarray(
-                self.policy.portfolio_action(self.state_vector(state)),
-                dtype=float,
+            raw_values, policy_log_prob = self.policy.portfolio_action_with_log_prob(
+                self.state_vector(state),
+                stochastic=self.shadow_mode,
             )
+            raw = np.asarray(raw_values, dtype=float)
         except (MARLDependencyError, MARLPolicyNotReady, ValueError):
             if self.shadow_mode:
                 return PortfolioAction(
@@ -163,6 +164,7 @@ class MetaRLPortfolioAdapterAgent:
             policy_version=getattr(self.policy, "policy_version", "v6-mappo"),
             reason="mappo_projected_inside_deterministic_risk_envelope",
             shadow_mode=self.shadow_mode,
+            policy_log_prob=policy_log_prob,
         )
 
 
