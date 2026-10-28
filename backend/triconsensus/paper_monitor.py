@@ -234,6 +234,7 @@ class PaperTradeMonitor:
                             "symbol": display_symbol,
                             "policy_version": policy_version,
                             "state_json": {
+                                **(open_payload.get("v6_adaptive_context") or {}),
                                 "account_state_at_entry": open_payload.get(
                                     "account_state_at_entry"
                                 )
