@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import UTC, datetime
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .config import settings
@@ -63,10 +63,11 @@ async def health() -> dict:
 
 
 @app.get("/v1/model-smoke")
-async def model_smoke() -> dict:
+async def model_smoke(request: Request) -> dict:
     if settings.app_env.lower() not in {"development", "preview", "staging"}:
         raise HTTPException(status_code=404, detail="not found")
-    provider = build_llm_provider(settings)
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    provider = build_llm_provider(settings, vercel_oidc_token=oidc_token)
     try:
         result = await provider.structured(
             system=(
