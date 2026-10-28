@@ -56,3 +56,47 @@ def test_archive_coverage_stats_detects_missing_intervals():
     assert stats["ideal_candles"] == 96
     assert stats["gap_count"] == 1
     assert stats["largest_gap_ms"] == 1_800_000
+
+
+def test_hybrid_archive_can_fall_back_for_missing_partial_month():
+    import asyncio
+
+    class FakeDaily:
+        async def daily_15m(self, symbol, day):
+            rows = []
+            for q in range(96):
+                ts = datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    q // 4,
+                    (q % 4) * 15,
+                    tzinfo=UTC,
+                )
+                rows.append(
+                    {
+                        "start_ms": int(ts.timestamp() * 1000),
+                        "open": 100,
+                        "high": 101,
+                        "low": 99,
+                        "close": 100,
+                        "volume": 1,
+                        "turnover": 100,
+                    }
+                )
+            return rows
+
+    class FakeClient(BybitKlineArchiveClient):
+        async def monthly_15m(self, symbol, year, month):
+            from triconsensus.archive_data import PublicArchiveFailure
+            raise PublicArchiveFailure("partial month")
+
+    client = FakeClient(fallback=FakeDaily())
+    rows = asyncio.run(
+        client.historical_15m(
+            "BTCUSDT",
+            days=7,
+            end_day=date(2026, 10, 6),
+        )
+    )
+    assert len(rows) == 7 * 96

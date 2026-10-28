@@ -215,49 +215,77 @@ class BybitKlineArchiveClient:
             async with semaphore:
                 return await self.monthly_15m(symbol, year, month)
 
-        try:
-            monthly = await asyncio.gather(
-                *(fetch_month(year, month) for year, month in months)
+        async def fetch_month_safe(
+            year: int,
+            month: int,
+        ) -> tuple[list[dict], tuple[int, int] | None]:
+            try:
+                return await fetch_month(year, month), None
+            except PublicArchiveFailure:
+                return [], (year, month)
+
+        monthly_results = await asyncio.gather(
+            *(fetch_month_safe(year, month) for year, month in months)
+        )
+        candles_by_start: dict[int, dict] = {}
+        start_ms = int(
+            datetime.combine(
+                first_day,
+                datetime.min.time(),
+                tzinfo=UTC,
+            ).timestamp()
+            * 1000
+        )
+        end_ms = int(
+            datetime.combine(
+                final_day + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=UTC,
+            ).timestamp()
+            * 1000
+        )
+
+        missing_months: list[tuple[int, int]] = []
+        for month_rows, missing in monthly_results:
+            if missing is not None:
+                missing_months.append(missing)
+                continue
+            for candle in month_rows:
+                timestamp = int(candle["start_ms"])
+                if start_ms <= timestamp < end_ms:
+                    candles_by_start[timestamp] = candle
+
+        fallback_days: list[date] = []
+        for year, month in missing_months:
+            month_first = date(year, month, 1)
+            month_last = date(year, month, calendar.monthrange(year, month)[1])
+            cursor_day = max(first_day, month_first)
+            final_missing_day = min(final_day, month_last)
+            while cursor_day <= final_missing_day:
+                fallback_days.append(cursor_day)
+                cursor_day += timedelta(days=1)
+
+        if fallback_days:
+            daily_semaphore = asyncio.Semaphore(4)
+
+            async def fetch_day(day: date) -> list[dict]:
+                async with daily_semaphore:
+                    return await self.fallback.daily_15m(symbol, day)
+
+            daily_results = await asyncio.gather(
+                *(fetch_day(day) for day in fallback_days)
             )
-            candles_by_start: dict[int, dict] = {}
-            start_ms = int(
-                datetime.combine(
-                    first_day,
-                    datetime.min.time(),
-                    tzinfo=UTC,
-                ).timestamp()
-                * 1000
-            )
-            end_ms = int(
-                datetime.combine(
-                    final_day + timedelta(days=1),
-                    datetime.min.time(),
-                    tzinfo=UTC,
-                ).timestamp()
-                * 1000
-            )
-            for month_rows in monthly:
-                for candle in month_rows:
+            for day_rows in daily_results:
+                for candle in day_rows:
                     timestamp = int(candle["start_ms"])
                     if start_ms <= timestamp < end_ms:
                         candles_by_start[timestamp] = candle
 
-            candles = [
-                candles_by_start[key]
-                for key in sorted(candles_by_start)
-            ]
-            quality = archive_coverage_stats(candles, requested_days=days)
-            if quality["coverage_ratio"] < 0.80:
-                raise PublicArchiveFailure(
-                    "MT4 kline coverage too sparse even for exploratory research: "
-                    f'{quality["coverage_ratio"]:.3f} for {days} requested days'
-                )
-            return candles
-        except PublicArchiveFailure:
-            if days > 90:
-                raise
-            return await self.fallback.historical_15m(
-                symbol,
-                days=days,
-                end_day=final_day,
+        candles = [candles_by_start[key] for key in sorted(candles_by_start)]
+        quality = archive_coverage_stats(candles, requested_days=days)
+        if quality["coverage_ratio"] < 0.80:
+            raise PublicArchiveFailure(
+                "hybrid kline archive coverage too sparse: "
+                f'{quality["coverage_ratio"]:.3f} for {days} requested days'
             )
+        return candles

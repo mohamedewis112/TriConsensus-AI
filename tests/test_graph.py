@@ -12,6 +12,7 @@ from triconsensus.domain import (
 from triconsensus.graph import TriConsensusGraph
 from triconsensus.levels import build_trade_levels
 from triconsensus.risk import DeterministicRiskEngine
+from triconsensus.v51_forward import V51_MODEL_FAMILY
 
 
 class ApprovingAgents:
@@ -141,3 +142,30 @@ async def test_risk_rejection_keeps_full_agent_consensus_in_audit():
     assert result["consensus_reason"] == "Full bullish consensus"
     assert result["risk"]["approved"] is False
     assert result["reason"] == "kill_switch_active"
+
+
+@pytest.mark.asyncio
+async def test_v51_no_trade_signal_fails_before_agents():
+    settings, _, inputs = state()
+    inputs["ml_evidence"] = {
+        "model_family": V51_MODEL_FAMILY,
+        "signal": "NO_TRADE",
+    }
+    graph = TriConsensusGraph(ShouldNotRunAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "NO_TRADE"
+    assert result["reason"] == "strategy_signal_no_trade"
+
+
+@pytest.mark.asyncio
+async def test_v51_signal_must_match_agent_consensus():
+    settings, _, inputs = state()
+    inputs["ml_evidence"] = {
+        "model_family": V51_MODEL_FAMILY,
+        "signal": "SHORT",
+    }
+    graph = TriConsensusGraph(ApprovingAgents(), DeterministicRiskEngine(settings))
+    result = await graph.decide(**inputs)
+    assert result["outcome"] == "NO_TRADE"
+    assert result["consensus_outcome"] == "NO_TRADE"
+    assert result["reason"] == "strategy_signal_disagreement"

@@ -1,0 +1,53 @@
+name: V5.1 Forward Calibration
+
+on:
+  workflow_dispatch:
+    inputs:
+      calibration_end_date:
+        description: Completed UTC day used as the frozen calibration endpoint
+        required: true
+        default: "2026-10-26"
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v51-forward-calibration.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  calibrate:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install calibration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "httpx>=0.28,<1" "numpy>=2.1,<3" "pandas>=2.2,<4"
+      - name: Build frozen V5.1 calibration
+        env:
+          PYTHONPATH: backend
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            END_DATE="${{ inputs.calibration_end_date }}"
+          else
+            END_DATE="$(tr -d '[:space:]' < research-trigger/v51-forward-calibration.txt)"
+          fi
+          python -m triconsensus.v51_forward_calibration \
+            --symbol "${{ matrix.symbol }}" \
+            --end-date "$END_DATE" \
+            --output-dir "artifacts/${{ matrix.symbol }}"
+      - name: Upload calibration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: v51-forward-calibration-${{ matrix.symbol }}
+          path: artifacts/${{ matrix.symbol }}/v51-forward-calibration.json
+          if-no-files-found: error
+          retention-days: 30

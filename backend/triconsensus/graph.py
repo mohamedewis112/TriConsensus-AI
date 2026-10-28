@@ -12,6 +12,7 @@ from .domain import ConsensusOutcome, DevilsAdvocate, MarketIntel, TradeProposal
 from .levels import TradeLevels, validate_proposal_levels
 from .llm import LLMFailure
 from .risk import DeterministicRiskEngine, RiskInput
+from .v51_forward import V51_MODEL_FAMILY
 
 
 class DecisionState(TypedDict, total=False):
@@ -37,9 +38,16 @@ class TriConsensusGraph:
         self.compiled = self._build()
 
     def precheck_node(self, state: DecisionState) -> dict[str, Any]:
-        model_family = str(state.get("ml_evidence", {}).get("model_family") or "")
+        evidence = state.get("ml_evidence", {})
+        model_family = str(evidence.get("model_family") or "")
         if model_family.startswith("untrained"):
             return {"failure_reason": "ml_untrained"}
+        if model_family == V51_MODEL_FAMILY:
+            signal = str(evidence.get("signal") or "")
+            if signal == "NO_TRADE":
+                return {"failure_reason": "strategy_signal_no_trade"}
+            if signal not in {"LONG", "SHORT"}:
+                return {"failure_reason": "strategy_signal_invalid"}
         return {}
 
     def after_precheck(self, state: DecisionState) -> str:
@@ -108,8 +116,19 @@ class TriConsensusGraph:
             state["proposal"],
             state["critic"],
         )
+        outcome = consensus.outcome.value
+        evidence = state.get("ml_evidence", {})
+        if (
+            str(evidence.get("model_family") or "") == V51_MODEL_FAMILY
+            and outcome in {"LONG", "SHORT"}
+            and outcome != str(evidence.get("signal") or "")
+        ):
+            return {
+                "consensus_outcome": "NO_TRADE",
+                "consensus_reason": "strategy_signal_disagreement",
+            }
         return {
-            "consensus_outcome": consensus.outcome.value,
+            "consensus_outcome": outcome,
             "consensus_reason": consensus.reason,
         }
 

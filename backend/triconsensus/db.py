@@ -115,6 +115,34 @@ class SupabaseRepository:
         except Exception as exc:
             raise PersistenceFailure(f"paper_trades read failed: {exc}") from exc
 
+    def get_active_strategy_calibration(
+        self,
+        *,
+        strategy_version: str,
+        symbol: str,
+        as_of: str,
+        calibration_end_on_or_before: str,
+    ) -> dict | None:
+        try:
+            rows = (
+                self.client.table("strategy_calibrations")
+                .select("*")
+                .eq("strategy_version", strategy_version)
+                .eq("symbol", symbol)
+                .lte("calibration_end", calibration_end_on_or_before)
+                .gt("expires_at", as_of)
+                .order("calibration_end", desc=True)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(
+                f"strategy calibration read failed: {exc}"
+            ) from exc
+        return rows[0] if rows else None
+
     def decision_replay(self, consensus_id: str) -> dict | None:
         try:
             rows = (
