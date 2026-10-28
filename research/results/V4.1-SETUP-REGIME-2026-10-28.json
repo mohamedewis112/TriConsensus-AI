@@ -1,0 +1,115 @@
+{
+  "experiment": "V4.1-SETUP-REGIME-2026-10-28",
+  "status": "rejected_candidate_pockets_only",
+  "setup_version": "v4.1-frozen-quant-setups",
+  "methodology": "Frozen deterministic setups x regime x direction; 15m; 12-candle cooldown; 1.5 ATR stop; 1.5 RR; 15 bps round-trip cost; stability + bootstrap gate.",
+  "conclusion": "No setup-regime-direction pair qualified on either BTC or clean ETH historical windows. Several small positive pockets are retained only as replication candidates; no trading activation.",
+  "BTCUSDT": {
+    "window": {
+      "days": 300,
+      "end_date": "2024-11-30",
+      "coverage_ratio": 0.9160069444444444,
+      "gap_safe": true
+    },
+    "signal_count": 2874,
+    "setup_signal_counts": {
+      "breakout": 711,
+      "range_reversion": 133,
+      "trend_continuation": 1026,
+      "trend_pullback": 1004
+    },
+    "qualified_count": 0,
+    "candidate_pockets": [
+      {
+        "setup": "trend_pullback",
+        "regime": "trend_down|mid_vol|momentum_down",
+        "side": "SHORT",
+        "trades": 35,
+        "hit_rate": 0.6,
+        "mean_net_return": 0.0008748435641191712,
+        "profit_factor": 1.466829904543891,
+        "profitable_folds": 2,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0004436352445546241
+      },
+      {
+        "setup": "trend_continuation",
+        "regime": "range|high_vol|momentum_down",
+        "side": "SHORT",
+        "trades": 70,
+        "hit_rate": 0.5285714285714286,
+        "mean_net_return": 0.000534673327680024,
+        "profit_factor": 1.1565830490658213,
+        "profitable_folds": 2,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0011989626985050407
+      },
+      {
+        "setup": "breakout",
+        "regime": "range|high_vol|momentum_down",
+        "side": "SHORT",
+        "trades": 34,
+        "hit_rate": 0.47058823529411764,
+        "mean_net_return": 0.00089769836070007,
+        "profit_factor": 1.2596567116818025,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.001543913377274494
+      }
+    ]
+  },
+  "ETHUSDT": {
+    "window": {
+      "days": 244,
+      "end_date": "2024-11-30",
+      "coverage_ratio": 1,
+      "gap_safe": true
+    },
+    "signal_count": 2604,
+    "setup_signal_counts": {
+      "breakout": 643,
+      "range_reversion": 131,
+      "trend_continuation": 915,
+      "trend_pullback": 915
+    },
+    "qualified_count": 0,
+    "candidate_pockets": [
+      {
+        "setup": "breakout",
+        "regime": "trend_up|high_vol|momentum_down",
+        "side": "SHORT",
+        "trades": 10,
+        "hit_rate": 0.7,
+        "mean_net_return": 0.005385345270195496,
+        "profit_factor": 2.737544445025886,
+        "profitable_folds": 4,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.000986979735849964
+      },
+      {
+        "setup": "breakout",
+        "regime": "trend_down|high_vol|momentum_up",
+        "side": "LONG",
+        "trades": 16,
+        "hit_rate": 0.5625,
+        "mean_net_return": 0.004090234622524727,
+        "profit_factor": 1.9322098268887764,
+        "profitable_folds": 4,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0018124370454993463
+      },
+      {
+        "setup": "trend_pullback",
+        "regime": "range|low_vol|momentum_up",
+        "side": "SHORT",
+        "trades": 13,
+        "hit_rate": 0.6923076923076923,
+        "mean_net_return": 0.002102414512168668,
+        "profit_factor": 2.4657298397193115,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.00028614678625514165
+      }
+    ]
+  }
+}
