@@ -59,3 +59,31 @@ def test_empty_setup_regime_analysis_is_fail_closed():
     report = analyze_setup_regimes([])
     assert report["qualified_count"] == 0
     assert report["qualified"] == []
+
+
+def test_setup_feature_bundle_satisfies_frozen_generator():
+    import math
+
+    from triconsensus.regime_research import build_regime_feature_frame
+    from triconsensus.setup_regime_research import _setup_features
+    from triconsensus.setups import generate_setups
+
+    candles = []
+    for i in range(180):
+        close = 100 + i * 0.05 + math.sin(i / 10)
+        candles.append(
+            {
+                "start_ms": i * 900_000,
+                "open": close - 0.1,
+                "high": close + 0.4,
+                "low": close - 0.4,
+                "close": close,
+                "volume": 100 + (i % 20) * 3,
+                "turnover": close * (100 + (i % 20) * 3),
+            }
+        )
+
+    frame = build_regime_feature_frame(candles)
+    features = _setup_features(frame, len(frame) - 1)
+    assert "rsi_14" in features
+    generate_setups(features)
