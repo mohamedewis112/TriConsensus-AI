@@ -52,7 +52,7 @@ def test_historical_metrics_allows_small_missing_day_fraction():
     from datetime import date
 
     class FakeClient(BinanceVisionMetricsClient):
-        async def daily_metrics(self, symbol, day):
+        async def daily_metrics(self, symbol, day, *, client=None):
             if day.day == 2:
                 return []
             return [

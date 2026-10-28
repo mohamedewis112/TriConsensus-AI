@@ -127,34 +127,42 @@ class BinanceVisionMetricsClient:
         self,
         symbol: str,
         day: date,
+        *,
+        client: httpx.AsyncClient | None = None,
     ) -> list[FuturesMetricRow]:
         url = self.daily_url(symbol, day)
-        async with self._semaphore:
-            for attempt in range(3):
-                try:
-                    async with httpx.AsyncClient(
-                        timeout=httpx.Timeout(45.0, connect=15.0),
-                        follow_redirects=True,
-                        headers={"User-Agent": "TriConsensus-AI/0.1 research"},
-                    ) as client:
-                        response = await client.get(url)
+
+        async def fetch(active_client: httpx.AsyncClient) -> list[FuturesMetricRow]:
+            async with self._semaphore:
+                for attempt in range(3):
+                    try:
+                        response = await active_client.get(url)
                         if response.status_code == 404:
                             return []
                         response.raise_for_status()
-                        payload = response.content
-                    return parse_metrics_zip(
-                        payload,
-                        symbol=symbol,
-                        archive_day=day,
-                    )
-                except httpx.HTTPError:
-                    if attempt < 2:
-                        await asyncio.sleep(0.75 * (2**attempt))
-                        continue
-                    # Treat a persistently unreachable day as missing data.
-                    # historical_metrics still fails closed when coverage <90%.
-                    return []
-        return []
+                        return parse_metrics_zip(
+                            response.content,
+                            symbol=symbol,
+                            archive_day=day,
+                        )
+                    except httpx.HTTPError:
+                        if attempt < 2:
+                            await asyncio.sleep(0.75 * (2**attempt))
+                            continue
+                        # Treat a persistently unreachable day as missing data.
+                        # historical_metrics still fails closed when coverage <90%.
+                        return []
+                return []
+
+        if client is not None:
+            return await fetch(client)
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(45.0, connect=15.0),
+            follow_redirects=True,
+            headers={"User-Agent": "TriConsensus-AI/0.1 research"},
+        ) as active_client:
+            return await fetch(active_client)
 
     async def historical_metrics(
         self,
@@ -177,29 +185,11 @@ class BinanceVisionMetricsClient:
             follow_redirects=True,
             headers={"User-Agent": "TriConsensus-AI/0.1 research"},
         ) as client:
-            async def fetch_day(day: date) -> list[FuturesMetricRow]:
-                url = self.daily_url(symbol, day)
-                async with self._semaphore:
-                    for attempt in range(3):
-                        try:
-                            response = await client.get(url)
-                            if response.status_code == 404:
-                                return []
-                            response.raise_for_status()
-                            return parse_metrics_zip(
-                                response.content,
-                                symbol=symbol,
-                                archive_day=day,
-                            )
-                        except httpx.HTTPError:
-                            if attempt < 2:
-                                await asyncio.sleep(0.75 * (2**attempt))
-                                continue
-                            return []
-                    return []
-
             results = await asyncio.gather(
-                *(fetch_day(day) for day in requested)
+                *(
+                    self.daily_metrics(symbol, day, client=client)
+                    for day in requested
+                )
             )
 
         rows_by_ts: dict[int, FuturesMetricRow] = {}
