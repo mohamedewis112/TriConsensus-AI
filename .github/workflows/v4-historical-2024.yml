@@ -1,10 +1,16 @@
 name: V4 Historical 2024 Discovery
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v4-2024.txt"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Completed Bybit archive days"
+        required: true
+        default: "300"
+      end_date:
+        description: "Archive end date (YYYY-MM-DD)"
+        required: true
+        default: "2024-11-30"
 
 permissions:
   contents: read
@@ -29,7 +35,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days 300             --end-date 2024-11-30             --output-dir "v4-2024/${{ matrix.symbol }}"
+          python -m triconsensus.regime_research             --symbol "${{ matrix.symbol }}"             --days "${{ inputs.days }}"             --end-date "${{ inputs.end_date }}"             --output-dir "v4-2024/${{ matrix.symbol }}"
       - uses: actions/upload-artifact@v4
         with:
           name: "triconsensus-v4-2024-${{ matrix.symbol }}-${{ github.run_id }}"
