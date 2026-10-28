@@ -31,5 +31,6 @@ jobs:
       - name: Probe derivatives coverage
         env:
           PYTHONPATH: backend
+          BYBIT_BASE_URL: https://api.bytick.com
         run: |
           python -m triconsensus.v5_data_probe             --symbol "${{ matrix.symbol }}"             --days 7             --end-date 2024-11-30
