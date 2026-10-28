@@ -7,6 +7,7 @@ const links = [
   ["/trades", "Trades"],
   ["/agents", "Agents"],
   ["/experiments", "Experiments"],
+  ["/health", "Health"],
 ];
 
 export function Sidebar() {
