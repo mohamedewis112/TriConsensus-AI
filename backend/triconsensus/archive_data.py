@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 from datetime import UTC, date, datetime, timedelta
 import gzip
@@ -135,12 +136,26 @@ class BybitPublicArchiveClient:
         final_day = end_day or (datetime.now(UTC).date() - timedelta(days=2))
         first_day = final_day - timedelta(days=days - 1)
 
-        candles_by_start: dict[int, dict] = {}
+        days_to_fetch: list[date] = []
         current = first_day
         while current <= final_day:
-            for candle in await self.daily_15m(symbol, current):
-                candles_by_start[int(candle["start_ms"])] = candle
+            days_to_fetch.append(current)
             current += timedelta(days=1)
+
+        semaphore = asyncio.Semaphore(6)
+
+        async def fetch_day(day: date) -> list[dict]:
+            async with semaphore:
+                return await self.daily_15m(symbol, day)
+
+        daily_results = await asyncio.gather(
+            *(fetch_day(day) for day in days_to_fetch)
+        )
+
+        candles_by_start: dict[int, dict] = {}
+        for day_candles in daily_results:
+            for candle in day_candles:
+                candles_by_start[int(candle["start_ms"])] = candle
 
         candles = [candles_by_start[key] for key in sorted(candles_by_start)]
         expected_minimum = days * 90
