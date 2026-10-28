@@ -142,3 +142,8 @@ td a { color: var(--cyan); }
   .opsKind { grid-column: 1; }
   .opsEventBody { grid-column: 2; grid-row: 1 / span 2; }
 }
+
+
+.agentRuntimeState { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 5px; }
+.agentRuntimeState > strong { color: var(--accent); font-size: 14px; }
+.agentRuntimeState > small { color: var(--muted); font-size: 10px; line-height: 1.45; }
