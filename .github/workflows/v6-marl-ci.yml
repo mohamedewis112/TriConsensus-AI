@@ -7,6 +7,9 @@ on:
     paths:
       - "backend/triconsensus/v6_*.py"
       - "backend/requirements-marl.txt"
+      - "backend/requirements-v6-collector.txt"
+      - "deploy/v6-shadow-collector.Dockerfile"
+      - ".railway/railway.ts"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
   pull_request:
@@ -14,6 +17,9 @@ on:
     paths:
       - "backend/triconsensus/v6_*.py"
       - "backend/requirements-marl.txt"
+      - "backend/requirements-v6-collector.txt"
+      - "deploy/v6-shadow-collector.Dockerfile"
+      - ".railway/railway.ts"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
 
@@ -39,3 +45,7 @@ jobs:
           PYTHONPATH: backend
         run: |
           pytest -q tests/test_v6_*.py
+
+      - name: Build lightweight V6 shadow collector image
+        run: |
+          docker build -f deploy/v6-shadow-collector.Dockerfile -t triconsensus-v6-shadow-collector:test .
