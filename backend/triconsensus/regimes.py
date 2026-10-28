@@ -148,6 +148,7 @@ def summarize_regime(
     minimum_trades: int = 40,
     minimum_mean_net_return: float = 0.0003,
     minimum_profitable_fold_fraction: float = 0.67,
+    minimum_fold_coverage: int = 3,
 ) -> RegimeStats:
     if len(values) != len(fold_ids):
         raise ValueError("returns and fold ids must align")
@@ -184,6 +185,7 @@ def summarize_regime(
     avg = mean(values)
     qualified = (
         len(values) >= minimum_trades
+        and len(fold_means) >= minimum_fold_coverage
         and avg >= minimum_mean_net_return
         and profitable_folds >= required_profitable
         and lcb > 0
