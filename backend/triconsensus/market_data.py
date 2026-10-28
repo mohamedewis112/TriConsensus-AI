@@ -136,6 +136,64 @@ class BybitPublicClient:
         result = body.get("result") or {}
         return parse_orderbook(result)
 
+
+    async def implied_volatility(self, symbol: str) -> dict:
+        """Approximate front-expiry ATM IV from Bybit option mark IV.
+
+        This is an implied-volatility input, not the historical-volatility endpoint.
+        We select the nearest non-expired option expiry and liquidity-weight mark IV
+        across near-ATM contracts (|delta| in [0.25, 0.75]).
+        """
+        self._validate_symbol(symbol)
+        base_coin = "BTC" if symbol == "BTCUSDT" else "ETH"
+        body = await self._get(
+            "/v5/market/tickers",
+            {"category": "option", "baseCoin": base_coin},
+        )
+        rows = body.get("result", {}).get("list") or []
+        if not rows:
+            raise MarketDataFailure(f"empty option ticker response for {base_coin}")
+
+        now = datetime.now(UTC)
+        candidates: list[tuple[datetime, float, float, str]] = []
+        for item in rows:
+            try:
+                parts = str(item["symbol"]).split("-")
+                if len(parts) < 4:
+                    continue
+                expiry = datetime.strptime(parts[1], "%d%b%y").replace(tzinfo=UTC)
+                if expiry <= now:
+                    continue
+                mark_iv = float(item.get("markIv") or 0)
+                delta = abs(float(item.get("delta") or 0))
+                open_interest = float(item.get("openInterest") or 0)
+                if mark_iv <= 0 or not 0.25 <= delta <= 0.75 or open_interest <= 0:
+                    continue
+                candidates.append(
+                    (expiry, mark_iv, open_interest, str(item["symbol"]))
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        if not candidates:
+            raise MarketDataFailure(f"no liquid near-ATM option IV for {base_coin}")
+
+        nearest_expiry = min(row[0] for row in candidates)
+        front = [row for row in candidates if row[0] == nearest_expiry]
+        total_oi = sum(row[2] for row in front)
+        if total_oi <= 0:
+            raise MarketDataFailure("invalid option open interest")
+        mark_iv = sum(row[1] * row[2] for row in front) / total_oi
+        return {
+            "base_coin": base_coin,
+            "mark_iv": mark_iv,
+            "expiry": nearest_expiry.isoformat(),
+            "sample_count": len(front),
+            "open_interest_weight": total_oi,
+            "captured_at": datetime.now(UTC).isoformat(),
+            "source": "bybit_option_tickers_mark_iv",
+        }
+
     async def klines(
         self,
         symbol: str,
