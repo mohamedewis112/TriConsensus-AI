@@ -61,6 +61,7 @@ export type OperationsSnapshot = {
     paper: {
       starting_balance: number;
       realized_pnl: number;
+      unrealized_pnl: number;
       fees: number;
       open_positions: number;
       closed_trades: number;
