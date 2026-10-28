@@ -1,1 +1,0 @@
-One-shot V5.1 untouched directional rule gate: frozen global_long_short_change_1h, inverse relationship, 3h horizon, BTC/ETH, calibration Jun-Nov 2024, untouched test Apr-May 2024.
