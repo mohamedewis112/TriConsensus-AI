@@ -113,14 +113,8 @@ begin
         order by start_time desc
         limit 1
       ) lr on true
-      where j.jobname in (
-        'v51-forward-signal-capture',
-        'v51-forward-rule-selector',
-        'v51-forward-rule-evaluator',
-        'v51-forward-watchdog',
-        'v51-agent-orchestration-preflight'
-      )
-         or j.jobid in (1,2)
+      where j.jobname like 'triconsensus_%'
+         or j.jobname='v51-agent-orchestration-preflight'
     ), '[]'::jsonb),
     'execution_counts', jsonb_build_object(
       'agent_runs', (select count(*) from public.agent_runs),
