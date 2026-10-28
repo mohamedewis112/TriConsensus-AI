@@ -10,6 +10,8 @@ on:
       - "backend/requirements-v6-collector.txt"
       - "deploy/v6-shadow-collector.Dockerfile"
       - ".railway/railway.ts"
+      - "supabase/functions/v6-shadow-observer/**"
+      - "supabase/migrations/*v6_shadow_observer.sql"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
   pull_request:
@@ -20,6 +22,8 @@ on:
       - "backend/requirements-v6-collector.txt"
       - "deploy/v6-shadow-collector.Dockerfile"
       - ".railway/railway.ts"
+      - "supabase/functions/v6-shadow-observer/**"
+      - "supabase/migrations/*v6_shadow_observer.sql"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
 
@@ -45,6 +49,19 @@ jobs:
           PYTHONPATH: backend
         run: |
           pytest -q tests/test_v6_*.py
+
+      - name: Verify Supabase shadow observer safety contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("supabase/functions/v6-shadow-observer/index.ts").read_text()
+          assert 'trading_authority: false' in source
+          assert 'v51_protocol_changed: false' in source
+          assert 'llm_invoked: false' in source
+          assert '.from("paper_trades")' not in source
+          assert '.from("marl_reward_memory").insert' not in source
+          assert '.from("marl_action_logs")' in source
+          PY
 
       - name: Build lightweight V6 shadow collector image
         run: |
