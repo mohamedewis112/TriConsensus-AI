@@ -114,3 +114,34 @@ def test_vectorized_regime_feature_frame_matches_required_columns():
     ]:
         assert column in frame.columns
     assert pd.notna(frame.iloc[-1]["atr_14"])
+
+
+def test_hierarchical_regime_analysis_preserves_broad_views():
+    from triconsensus.regime_research import analyze_regimes
+
+    observations = []
+    for i in range(160):
+        observations.append({
+            "timestamp_ms": i * 900000,
+            "regime": "trend_up|mid_vol|momentum_up",
+            "trend": "trend_up",
+            "volatility": "mid_vol",
+            "momentum": "momentum_up",
+            "side": "LONG",
+            "net_return": 0.001,
+        })
+        observations.append({
+            "timestamp_ms": i * 900000,
+            "regime": "trend_up|mid_vol|momentum_up",
+            "trend": "trend_up",
+            "volatility": "mid_vol",
+            "momentum": "momentum_up",
+            "side": "SHORT",
+            "net_return": -0.001,
+        })
+
+    report = analyze_regimes(observations)
+    assert report["qualified_count"] == 1
+    assert report["qualified"][0]["side"] == "LONG"
+    assert report["hierarchy"]["trend_only"][0]["regime"] == "trend_up"
+    assert "trend_volatility" in report["hierarchy"]
