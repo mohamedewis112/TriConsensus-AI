@@ -98,6 +98,7 @@ async def run_live_research_cycle(
             "outcome": "NO_TRADE",
             "reason": "v51_live_signal_unavailable",
             "error": type(exc).__name__,
+            "detail": str(exc)[:200],
             "paper_only": True,
             "persisted": False,
             "execution_performed": False,
