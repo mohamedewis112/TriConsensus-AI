@@ -82,6 +82,17 @@ def duration_seconds(opened_at: str, closed_at: datetime) -> int:
     return max(0, int((closed_at - opened.astimezone(UTC)).total_seconds()))
 
 
+def horizon_expired(
+    opened_at: str,
+    now: datetime,
+    *,
+    horizon_minutes: int,
+) -> bool:
+    if horizon_minutes <= 0:
+        raise ValueError("horizon_minutes must be positive")
+    return duration_seconds(opened_at, now) >= horizon_minutes * 60
+
+
 class PaperTradeMonitor:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -166,7 +177,11 @@ class PaperTradeMonitor:
             elapsed_seconds = duration_seconds(str(trade["opened_at"]), datetime.now(UTC))
             if (
                 version.startswith("V6")
-                and elapsed_seconds >= self.settings.v6_trade_horizon_minutes * 60
+                and horizon_expired(
+                    str(trade["opened_at"]),
+                    datetime.now(UTC),
+                    horizon_minutes=self.settings.v6_trade_horizon_minutes,
+                )
             ):
                 signal = ExitSignal(True, "HORIZON_LIMIT")
             else:
