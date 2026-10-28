@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # V6 observation is independent from enforcement. Observation may collect
     # shadow states/actions/rewards while V6_MARL_ENABLED remains false.
     # Enforcement is active only when enabled=true AND shadow_mode=false.
-    v6_marl_observe: bool = True
+    v6_marl_observe: bool = False
     v6_marl_enabled: bool = False
     v6_marl_shadow_mode: bool = True
     v6_reward_window: int = Field(default=40, ge=20, le=40)
