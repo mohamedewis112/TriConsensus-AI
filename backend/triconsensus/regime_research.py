@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .kline_archive import BybitKlineArchiveClient
+from .kline_archive import BybitKlineArchiveClient, archive_coverage_stats
 from .features import _adx, _atr, _rsi
 from .regimes import (
     classify_regime,
@@ -74,6 +74,34 @@ def _feature_dict(row: pd.Series) -> dict:
     return {key: float(value) for key, value in required.items()}
 
 
+def contiguous_evaluation_mask(
+    candles: list[dict],
+    *,
+    lookback: int,
+    horizon: int,
+    interval_ms: int = 15 * 60 * 1000,
+) -> np.ndarray:
+    if lookback <= 0 or horizon <= 0:
+        raise ValueError("lookback and horizon must be positive")
+    starts = np.asarray([int(row["start_ms"]) for row in candles], dtype=np.int64)
+    n = len(starts)
+    mask = np.zeros(n, dtype=bool)
+    if n < lookback + horizon:
+        return mask
+
+    gap_at = np.zeros(n, dtype=np.int64)
+    if n > 1:
+        gap_at[1:] = (np.diff(starts) != interval_ms).astype(np.int64)
+    prefix = np.cumsum(gap_at)
+
+    for i in range(lookback - 1, n - horizon):
+        left = i - lookback + 1
+        right = i + horizon
+        gaps_inside = int(prefix[right] - prefix[left])
+        mask[i] = gaps_inside == 0
+    return mask
+
+
 def build_regime_observations(
     candles: list[dict],
     *,
@@ -89,12 +117,18 @@ def build_regime_observations(
         raise ValueError("not enough candles for regime research")
 
     frame = build_regime_feature_frame(candles)
+    contiguous = contiguous_evaluation_mask(
+        candles,
+        lookback=lookback,
+        horizon=horizon,
+    )
     usable_start = max(lookback - 1, 60)
     usable_end = len(candles) - horizon
     indices = [
         i
         for i in range(usable_start, usable_end)
-        if np.isfinite(float(frame.iloc[i]["realized_vol_20"]))
+        if contiguous[i]
+        and np.isfinite(float(frame.iloc[i]["realized_vol_20"]))
     ]
     if len(indices) < calibration_rows + 100:
         raise ValueError("not enough finite regime feature rows")
@@ -227,6 +261,7 @@ async def run_regime_research(
     )
     thresholds, observations = build_regime_observations(candles)
     analysis = analyze_regimes(observations)
+    data_quality = archive_coverage_stats(candles, requested_days=days)
 
     report = {
         "experiment": "V4-REGIME-DISCOVERY",
@@ -239,6 +274,8 @@ async def run_regime_research(
         "history_end_ms": int(candles[-1]["start_ms"]),
         "candle_count": len(candles),
         "observation_count": len(observations),
+        "data_quality": data_quality,
+        "gap_safe_windows_only": True,
         "round_trip_cost": 0.0015,
         "barrier_horizon": 12,
         "stop_atr": 1.5,
