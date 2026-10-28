@@ -169,7 +169,7 @@ class PaperTradeMonitor:
 
         self.v6_risk_agent = DynamicVolatilityRiskAgent(
             self.v6_policy,
-            shadow_mode=settings.v6_marl_shadow_mode,
+            shadow_mode=settings.v6_marl_effective_shadow_mode,
             max_microstructure_age_ms=settings.v6_max_microstructure_age_ms,
             adverse_imbalance=settings.v6_adverse_orderbook_imbalance,
         )
