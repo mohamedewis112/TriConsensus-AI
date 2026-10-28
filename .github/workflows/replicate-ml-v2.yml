@@ -1,10 +1,16 @@
 name: Replicate ML V2 on Disjoint Window
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "ml-trigger/v2-replication.txt"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Completed Bybit archive days"
+        required: true
+        default: "30"
+      end_date:
+        description: "Archive end date (YYYY-MM-DD)"
+        required: true
+        default: "2026-10-11"
 
 permissions:
   contents: read
@@ -29,7 +35,7 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.training_v2             --symbol "${{ matrix.symbol }}"             --days 30             --end-date 2026-10-11             --output-dir "replication/${{ matrix.symbol }}"
+          python -m triconsensus.training_v2             --symbol "${{ matrix.symbol }}"             --days "${{ inputs.days }}"             --end-date "${{ inputs.end_date }}"             --output-dir "replication/${{ matrix.symbol }}"
       - uses: actions/upload-artifact@v4
         with:
           name: "triconsensus-v2-replication-${{ matrix.symbol }}-${{ github.run_id }}"
