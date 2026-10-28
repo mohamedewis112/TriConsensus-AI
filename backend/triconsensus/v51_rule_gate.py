@@ -149,13 +149,21 @@ def evaluate_rule(trades: list[dict], *, folds: int = 4) -> dict:
     longs = sum(1 for row in trades if row["side"] == "LONG")
     shorts = len(trades) - longs
 
+    no_loss_positive_series = (
+        all(value >= 0 for value in returns)
+        and any(value > 0 for value in returns)
+    )
+    profit_factor_pass = (
+        (pf is not None and pf >= 1.20)
+        or no_loss_positive_series
+    )
+
     qualified = (
         len(trades) >= 80
         and mean_net >= 0.0005
         and profitable_folds >= 3
         and lcb > 0
-        and pf is not None
-        and pf >= 1.20
+        and profit_factor_pass
     )
 
     return {
