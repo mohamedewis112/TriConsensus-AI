@@ -187,7 +187,7 @@ class PaperTradeMonitor:
             candles = await self.market.klines(
                 bybit_symbol,
                 "15m",
-                limit=60,
+                limit=80,
                 drop_open_candle=True,
             )
             features = build_features(_frame(candles))
