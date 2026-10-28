@@ -16,6 +16,7 @@ from .market_data import BybitPublicClient, MarketDataFailure
 from .metrics import calculate_metrics
 from .paper_monitor import PaperTradeMonitor
 from .preflight import run_preflight
+from .research_cycle import run_live_research_cycle
 from .security import require_control_key
 from .v51_forward import PAPER_EXPERIMENT_VERSION
 
@@ -155,6 +156,21 @@ async def agent_smoke(request: Request) -> dict:
         "live_trading": False,
         "persisted": False,
     }
+
+
+@app.get("/v1/research-cycle/{symbol}")
+async def research_cycle(symbol: str, request: Request) -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        return await run_live_research_cycle(
+            settings,
+            symbol=symbol,
+            vercel_oidc_token=oidc_token,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/v1/preflight", dependencies=[Depends(require_control_key)])
