@@ -2,90 +2,41 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
-import os
-from typing import Any
-
-import httpx
 
 from .config import Settings
 from .execution import PaperExecutionEngine
 from .market_data import BybitPublicClient, MarketDataFailure
-from .paper_monitor import evaluate_exit, update_excursions
+from .paper_monitor import duration_seconds, evaluate_exit, update_excursions
 from .research_cycle import run_live_research_cycle
+from .runtime_gateway import PaperRuntimeGateway, RuntimeGatewayFailure
+from .v6_models import RewardMemoryRecord
 
 
-class PaperRuntimeGatewayFailure(RuntimeError):
+class PaperRuntimeFailure(RuntimeError):
     pass
 
 
-class PaperRuntimeGateway:
-    def __init__(self) -> None:
-        self.url = (os.getenv("TRICONSENSUS_SUPABASE_URL") or "").rstrip("/")
-        self.publishable_key = os.getenv("TRICONSENSUS_SUPABASE_PUBLISHABLE_KEY") or ""
-        self.runtime_token = os.getenv("TRICONSENSUS_DASHBOARD_TOKEN") or ""
-        if not self.url or not self.publishable_key or not self.runtime_token:
-            raise PaperRuntimeGatewayFailure("paper runtime Supabase credentials are missing")
-
-    def _headers(self) -> dict[str, str]:
-        headers = {
-            "apikey": self.publishable_key,
-            "Content-Type": "application/json",
-        }
-        # Legacy anon keys are JWTs and may also be used as the bearer token.
-        # Modern sb_publishable_* keys must stay on the apikey header only.
-        if self.publishable_key.startswith("eyJ"):
-            headers["Authorization"] = f"Bearer {self.publishable_key}"
-        return headers
-
-    async def _rpc(self, name: str, payload: dict[str, Any]) -> Any:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-            response = await client.post(
-                f"{self.url}/rest/v1/rpc/{name}",
-                headers=self._headers(),
-                json=payload,
+def _reward_records(rows: list[dict]) -> list[RewardMemoryRecord]:
+    records: list[RewardMemoryRecord] = []
+    for row in rows:
+        try:
+            records.append(
+                RewardMemoryRecord(
+                    symbol=row["symbol"],
+                    trade_id=str(row["trade_id"]),
+                    policy_version=str(row["policy_version"]),
+                    state=row.get("state_json") or {},
+                    action=row.get("action_json") or {},
+                    net_return=float(row["net_return"]),
+                    max_drawdown=float(row["max_drawdown"]),
+                    reward=float(row["reward"]),
+                    terminal=bool(row.get("terminal", True)),
+                    created_at=row.get("created_at"),
+                )
             )
-        if response.status_code >= 400:
-            detail = response.text[:500]
-            raise PaperRuntimeGatewayFailure(
-                f"{name} failed with HTTP {response.status_code}: {detail}"
-            )
-        return response.json()
-
-    async def dashboard_snapshot(self) -> dict:
-        result = await self._rpc(
-            "triconsensus_dashboard_snapshot",
-            {"p_token": self.runtime_token},
-        )
-        if not isinstance(result, dict):
-            raise PaperRuntimeGatewayFailure("dashboard snapshot returned invalid payload")
-        return result
-
-    async def open_trade(self, payload: dict) -> dict:
-        result = await self._rpc(
-            "triconsensus_open_paper_trade",
-            {"p_token": self.runtime_token, "p_payload": payload},
-        )
-        if not isinstance(result, dict):
-            raise PaperRuntimeGatewayFailure("open RPC returned invalid payload")
-        return result
-
-    async def monitor_trade(self, payload: dict) -> dict:
-        result = await self._rpc(
-            "triconsensus_monitor_paper_trade",
-            {"p_token": self.runtime_token, "p_payload": payload},
-        )
-        if not isinstance(result, dict):
-            raise PaperRuntimeGatewayFailure("monitor RPC returned invalid payload")
-        return result
-
-    async def close_trade(self, payload: dict) -> dict:
-        result = await self._rpc(
-            "triconsensus_close_paper_trade",
-            {"p_token": self.runtime_token, "p_payload": payload},
-        )
-        if not isinstance(result, dict):
-            raise PaperRuntimeGatewayFailure("close RPC returned invalid payload")
-        return result
+        except (KeyError, TypeError, ValueError):
+            continue
+    return records
 
 
 def _assert_shadow_only(agent_result: dict) -> None:
@@ -93,161 +44,176 @@ def _assert_shadow_only(agent_result: dict) -> None:
     for role in ("portfolio", "dynamic_risk"):
         action = adaptive.get(role)
         if action is not None and not bool(action.get("shadow_mode", True)):
-            raise PaperRuntimeGatewayFailure(
+            raise PaperRuntimeFailure(
                 f"V6 {role} attempted enforcement in paper runtime"
             )
 
 
 class PaperRuntimeService:
-    def __init__(self, settings: Settings) -> None:
-        if settings.trading_mode != "paper":
-            raise PaperRuntimeGatewayFailure("paper runtime refuses non-paper mode")
+    def __init__(self, settings: Settings, *, vercel_oidc_token: str | None) -> None:
+        if settings.trading_mode.value != "paper":
+            raise PaperRuntimeFailure("paper runtime refuses non-paper mode")
         if settings.v6_marl_enforcement_active:
-            raise PaperRuntimeGatewayFailure("paper runtime refuses V6 enforcement")
+            raise PaperRuntimeFailure("paper runtime refuses V6 enforcement")
         self.settings = settings
-        self.gateway = PaperRuntimeGateway()
+        self.gateway = PaperRuntimeGateway(
+            settings,
+            vercel_oidc_token=vercel_oidc_token,
+        )
         self.execution = PaperExecutionEngine()
         self.market = BybitPublicClient(settings)
+        self.oidc_token = vercel_oidc_token
 
-    async def run_symbol(
-        self,
-        *,
-        symbol: str,
-        vercel_oidc_token: str | None,
-    ) -> dict:
-        snapshot = await self.gateway.dashboard_snapshot()
-        ledger = snapshot.get("paper_trades") or []
+    async def status(self) -> dict:
+        snapshot = await self.gateway.snapshot()
+        trades = list(snapshot.get("paper_trades") or [])
+        rewards = list(snapshot.get("reward_memory") or [])
+        return {
+            "status": "ok",
+            "paper_only": True,
+            "live_trading": False,
+            "v6_enforcement": False,
+            "experiment": snapshot.get("experiment") or {},
+            "paper_trades": {
+                "total": len(trades),
+                "open": sum(1 for row in trades if row.get("status") == "open"),
+                "closed": sum(1 for row in trades if row.get("status") == "closed"),
+            },
+            "reward_memory_count": len(rewards),
+        }
+
+    async def run_symbol(self, *, symbol: str) -> dict:
+        snapshot = await self.gateway.snapshot()
+        ledger = list(snapshot.get("paper_trades") or [])
+        rewards = _reward_records(list(snapshot.get("reward_memory") or []))
+
         result = await run_live_research_cycle(
             self.settings,
             symbol=symbol,
-            vercel_oidc_token=vercel_oidc_token,
+            vercel_oidc_token=self.oidc_token,
             ledger=ledger,
+            reward_memory=rewards,
             include_persistence_context=True,
         )
 
-        if result.get("outcome") not in {"LONG", "SHORT"}:
-            result.pop("persistence_context", None)
+        context = result.pop("persistence_context", None)
+        if context is None:
             return {
                 **result,
                 "paper_runtime": "NO_TRADE",
-                "persisted": False,
-                "execution_performed": False,
+                "runtime_commit": None,
+                "paper_trade_opened": False,
             }
 
-        gate = result.get("protocol_gate") or {}
         agent_result = result.get("agent_result") or {}
-        risk = agent_result.get("risk") or {}
-        proposal = (agent_result.get("agents") or {}).get("proposal") or {}
-        if not (
-            bool(gate.get("research_paper_candidate"))
-            and bool(gate.get("v51_direction_match"))
-            and bool(gate.get("deterministic_risk_approved"))
-            and bool(agent_result.get("full_consensus"))
-            and bool(risk.get("approved"))
-        ):
-            result.pop("persistence_context", None)
-            return {
-                **result,
-                "outcome": "NO_TRADE",
-                "reason": "paper_runtime_gate_rejected",
-                "paper_runtime": "NO_TRADE",
-                "persisted": False,
-                "execution_performed": False,
-            }
-
+        gate = result.get("protocol_gate") or {}
+        account_state = context.get("account_state") or {}
         _assert_shadow_only(agent_result)
 
-        entry_zone = proposal.get("entry_zone") or []
-        if not entry_zone:
-            raise PaperRuntimeGatewayFailure("approved proposal has no entry zone")
-        requested_entry = sum(float(x) for x in entry_zone) / len(entry_zone)
-        quantity = float(risk.get("position_size") or 0)
-        context = result.get("persistence_context") or {}
-        account_state = context.get("account_state") or {}
-        if quantity <= 0:
-            raise PaperRuntimeGatewayFailure("approved risk decision has no position size")
+        paper_fill = None
+        opened_at = None
+        if bool(gate.get("research_paper_candidate")):
+            proposal = (agent_result.get("agents") or {}).get("proposal") or {}
+            risk = agent_result.get("risk") or {}
+            entry_zone = [float(value) for value in (proposal.get("entry_zone") or [])]
+            if not entry_zone:
+                raise PaperRuntimeFailure("qualified candidate has no entry zone")
+            quantity = float(risk.get("position_size") or 0)
+            if quantity <= 0:
+                raise PaperRuntimeFailure(
+                    "qualified candidate has no deterministic position size"
+                )
+            requested_entry = sum(entry_zone) / len(entry_zone)
+            fill = self.execution.open_market(
+                side=str(result["outcome"]),
+                requested_price=requested_entry,
+                quantity=quantity,
+                slippage_bps=float(account_state.get("slippage_bps") or 0),
+            )
+            paper_fill = asdict(fill)
+            opened_at = datetime.now(UTC).isoformat()
 
-        fill = self.execution.open_market(
-            side=str(result["outcome"]),
-            requested_price=requested_entry,
-            quantity=quantity,
-            slippage_bps=float(account_state.get("slippage_bps") or 0),
-        )
-
-        # The deterministic risk object intentionally does not carry the proposal
-        # entry. Add it only to the immutable audit payload consumed by Supabase.
-        audit_agent_result = {
-            **agent_result,
-            "risk": {**risk, "entry": requested_entry},
-        }
         payload = {
             "paper_only": True,
             "live_trading": False,
             "v6_enforcement": False,
             "symbol": result["symbol"],
-            "side": result["outcome"],
+            "v51_signal": result["v51_signal"],
             "observed_at": result["observed_at"],
-            "strategy": result["v51_signal"],
-            "provider": result["provider"],
-            "model_id": result["model_id"],
-            "agent_result": audit_agent_result,
-            "protocol_gate": gate,
-            "paper_fill": asdict(fill),
-            "risk_fraction": self.settings.risk_per_trade,
-            "market_snapshot": context.get("market_snapshot") or {},
-            "feature_snapshot": context.get("feature_snapshot") or {},
+            "market_snapshot": context["market_snapshot"],
+            "feature_snapshot": context["feature_snapshot"],
             "account_state": account_state,
             "v6_adaptive_context": context.get("v6_adaptive_context") or {},
+            "agent_result": agent_result,
+            "protocol_gate": gate,
+            "llm_provider": result.get("provider") or self.settings.llm_provider,
+            "llm_model": result.get("model_id")
+            or self.settings.vercel_ai_gateway_model,
         }
-        persisted = await self.gateway.open_trade(payload)
-        result.pop("persistence_context", None)
+        if paper_fill is not None:
+            payload["paper_fill"] = paper_fill
+            payload["opened_at"] = opened_at
+
+        committed = await self.gateway.commit(payload)
         return {
             **result,
-            "paper_runtime": persisted.get("status", "UNKNOWN"),
-            "persistence": persisted,
-            "persisted": persisted.get("status") in {"OPENED", "EXISTING"},
-            "execution_performed": False,
-            "simulated_fill": asdict(fill),
+            "persisted": bool(committed.get("committed")),
+            "paper_runtime": (
+                "OPENED"
+                if committed.get("opened")
+                else "EXISTING"
+                if committed.get("duplicate")
+                else "NO_TRADE"
+            ),
+            "paper_trade_opened": bool(committed.get("opened")),
+            "duplicate": bool(committed.get("duplicate")),
+            "runtime_commit": committed,
+            "simulated_fill": paper_fill,
         }
 
     async def monitor(self) -> dict:
-        snapshot = await self.gateway.dashboard_snapshot()
-        trades = [
-            trade
-            for trade in (snapshot.get("paper_trades") or [])
-            if trade.get("status") == "open"
+        snapshot = await self.gateway.snapshot()
+        open_trades = [
+            row
+            for row in (snapshot.get("paper_trades") or [])
+            if row.get("status") == "open"
         ]
-        results: list[dict] = []
         ticker_cache: dict[str, dict] = {}
+        results: list[dict] = []
 
-        for trade in reversed(trades):
-            symbol = str(trade["symbol"]).replace("/", "")
+        for trade in open_trades:
+            display_symbol = str(trade["symbol"])
+            bybit_symbol = display_symbol.replace("/", "")
             try:
-                if symbol not in ticker_cache:
-                    ticker_cache[symbol] = await self.market.ticker(symbol)
-                ticker = ticker_cache[symbol]
-            except (MarketDataFailure, ValueError) as exc:
+                if bybit_symbol not in ticker_cache:
+                    ticker_cache[bybit_symbol] = await self.market.ticker(bybit_symbol)
+                last_price = float(ticker_cache[bybit_symbol]["last_price"])
+            except (MarketDataFailure, ValueError, KeyError, TypeError):
                 results.append(
                     {
                         "trade_id": trade["id"],
                         "action": "NO_ACTION",
                         "reason": "market_data_failure",
-                        "error": type(exc).__name__,
                     }
                 )
                 continue
 
-            last_price = float(ticker["last_price"])
             mae, mfe = update_excursions(trade, last_price)
-            signal = evaluate_exit(trade, last_price, mfe=mfe, trailing_lock_fraction=0.0)
+            signal = evaluate_exit(
+                trade,
+                last_price,
+                mfe=mfe,
+                trailing_lock_fraction=0.0,
+            )
 
             if not signal.triggered:
-                updated = await self.gateway.monitor_trade(
+                persisted = await self.gateway.monitor(
                     {
                         "paper_only": True,
                         "live_trading": False,
                         "v6_enforcement": False,
                         "trade_id": trade["id"],
+                        "action": "MONITOR",
                         "mae": mae,
                         "mfe": mfe,
                     }
@@ -257,17 +223,17 @@ class PaperRuntimeService:
                         "trade_id": trade["id"],
                         "action": "MONITORED",
                         "last_price": last_price,
-                        "persistence": updated,
+                        "persistence": persisted,
                     }
                 )
                 continue
 
-            if signal.reason == "INVALID_SIDE":
+            if signal.reason not in {"STOP_LOSS", "TAKE_PROFIT_1"}:
                 results.append(
                     {
                         "trade_id": trade["id"],
                         "action": "NO_ACTION",
-                        "reason": "invalid_side",
+                        "reason": signal.reason or "invalid_exit_signal",
                     }
                 )
                 continue
@@ -282,21 +248,41 @@ class PaperRuntimeService:
                 quantity=float(trade["position_size"]),
                 slippage_bps=slippage_bps,
             )
+            total_fees = float(trade.get("realized_fees") or 0) + fill.fee
+            total_slippage = (
+                float(trade.get("realized_slippage") or 0) + fill.slippage_cost
+            )
+            pnl = self.execution.pnl(
+                position_side=str(trade["side"]),
+                entry_fill=float(trade["actual_entry"]),
+                exit_fill=fill.fill_price,
+                quantity=float(trade["position_size"]),
+                total_fees=total_fees,
+            )
             closed_at = datetime.now(UTC)
-            persisted = await self.gateway.close_trade(
+
+            persisted = await self.gateway.monitor(
                 {
                     "paper_only": True,
                     "live_trading": False,
                     "v6_enforcement": False,
                     "trade_id": trade["id"],
+                    "action": "CLOSE",
+                    "close_reason": signal.reason,
                     "requested_exit": last_price,
                     "actual_exit": fill.fill_price,
-                    "close_fee": fill.fee,
-                    "close_slippage": fill.slippage_cost,
+                    "realized_fees": total_fees,
+                    "realized_slippage": total_slippage,
+                    "pnl_gross": pnl.gross,
+                    "pnl_net": pnl.net,
                     "mae": mae,
                     "mfe": mfe,
                     "closed_at": closed_at.isoformat(),
-                    "close_reason": signal.reason,
+                    "trade_duration_seconds": duration_seconds(
+                        str(trade["opened_at"]),
+                        closed_at,
+                    ),
+                    "fill": asdict(fill),
                 }
             )
             results.append(
@@ -304,6 +290,7 @@ class PaperRuntimeService:
                     "trade_id": trade["id"],
                     "action": "CLOSED",
                     "reason": signal.reason,
+                    "pnl_net": pnl.net,
                     "persistence": persisted,
                 }
             )
@@ -312,7 +299,9 @@ class PaperRuntimeService:
             "paper_only": True,
             "live_trading": False,
             "v6_enforcement": False,
-            "checked": len(trades),
-            "closed": sum(1 for row in results if row.get("action") == "CLOSED"),
+            "checked": len(open_trades),
+            "closed": sum(
+                1 for row in results if row.get("action") == "CLOSED"
+            ),
             "results": results,
         }
