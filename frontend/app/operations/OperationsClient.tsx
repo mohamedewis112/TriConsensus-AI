@@ -129,7 +129,7 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
   const filtered = useMemo(() => {
     if (!data) return [];
     if (filter === "ALL") return data.events;
-    if (filter === "EXECUTION") return data.events.filter((e) => ["AGENT", "CONSENSUS", "RISK", "TRADE", "TRADE_EVENT"].includes(e.kind));
+    if (filter === "EXECUTION") return data.events.filter((e) => ["ORCHESTRATOR", "AGENT", "CONSENSUS", "RISK", "TRADE", "TRADE_EVENT"].includes(e.kind));
     return data.events.filter((e) => e.kind === filter);
   }, [data, filter]);
 
