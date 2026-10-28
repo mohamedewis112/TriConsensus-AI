@@ -151,3 +151,26 @@ def test_regime_research_has_resolved_data_client():
     import triconsensus.regime_research as research
 
     assert research.BybitKlineArchiveClient is not None
+
+
+def test_contiguous_mask_rejects_windows_crossing_data_gap():
+    from triconsensus.regime_research import contiguous_evaluation_mask
+
+    candles = []
+    timestamp = 0
+    for i in range(160):
+        if i == 90:
+            timestamp += 900_000
+        candles.append({"start_ms": timestamp})
+        timestamp += 900_000
+
+    mask = contiguous_evaluation_mask(
+        candles,
+        lookback=20,
+        horizon=5,
+    )
+
+    # Window around the missing candle must be blocked.
+    assert mask[89] is False or bool(mask[89]) is False
+    assert mask[90] is False or bool(mask[90]) is False
+    assert mask[110] is True or bool(mask[110]) is True
