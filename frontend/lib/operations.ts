@@ -152,3 +152,56 @@ export async function getOperationsSnapshot(limit = 100): Promise<OperationsSnap
     return null;
   }
 }
+
+
+export type HealthSnapshot = {
+  generated_at: string;
+  watchdog: {
+    status?: string;
+    checked_at?: string;
+    checks?: Record<string, unknown>;
+  };
+  market_freshness: Record<string, {
+    latest_candle?: string;
+    latest_ratio?: string;
+  }>;
+  runtime_capabilities: Array<{
+    capability: string;
+    enabled: boolean;
+    reason?: string;
+    updated_at?: string;
+  }>;
+  cron_jobs: Array<{
+    jobid: number;
+    jobname: string;
+    schedule: string;
+    active: boolean;
+    last_status?: string;
+    last_start?: string;
+    last_end?: string;
+    last_message?: string;
+  }>;
+  execution_counts: {
+    agent_runs: number;
+    consensus_decisions: number;
+    risk_evaluations: number;
+    paper_trades: number;
+  };
+};
+
+export async function getHealthSnapshot(): Promise<HealthSnapshot | null> {
+  const base = process.env.TRICONSENSUS_SUPABASE_URL;
+  const publishable = process.env.TRICONSENSUS_SUPABASE_PUBLISHABLE_KEY;
+  const token = process.env.TRICONSENSUS_DASHBOARD_TOKEN;
+  if (!base || !publishable || !token) return null;
+
+  try {
+    const response = await rpc(base, publishable, "triconsensus_health_snapshot", {
+      p_token: token,
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as HealthSnapshot;
+  } catch {
+    return null;
+  }
+}
