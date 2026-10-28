@@ -4,16 +4,25 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from .config import settings
 from .cycle import PaperDecisionCycle, V6_PAPER_EXPERIMENT_VERSION
 from .db import PersistenceFailure, SupabaseRepository
+from .llm import LLMFailure, build_llm_provider
 from .market_data import BybitPublicClient, MarketDataFailure
 from .metrics import calculate_metrics
 from .paper_monitor import PaperTradeMonitor
 from .preflight import run_preflight
 from .security import require_control_key
 from .v51_forward import PAPER_EXPERIMENT_VERSION
+
+
+
+class ModelSmokeResult(BaseModel):
+    status: str
+    confidence: float = Field(ge=0, le=1)
+    evidence: list[str] = []
 
 app = FastAPI(title="TriConsensus AI API", version="0.1.0")
 market = BybitPublicClient(settings)
@@ -50,6 +59,38 @@ async def health() -> dict:
         "trading_mode": settings.trading_mode,
         "live_trading": False,
         "kill_switch_active": settings.emergency_kill_switch,
+    }
+
+
+@app.get("/v1/model-smoke")
+async def model_smoke() -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    provider = build_llm_provider(settings)
+    try:
+        result = await provider.structured(
+            system=(
+                "You are a connectivity test. Return only the requested structured schema. "
+                "Do not provide financial, trading, or investment advice."
+            ),
+            user=(
+                "Confirm that structured-output connectivity is working. "
+                "Use status=OK, confidence=1.0, and one short evidence item."
+            ),
+            schema=ModelSmokeResult,
+        )
+    except LLMFailure as exc:
+        raise HTTPException(status_code=503, detail=f"MODEL_UNAVAILABLE: {exc}") from exc
+    return {
+        "provider": settings.llm_provider,
+        "model": (
+            settings.vercel_ai_gateway_model
+            if settings.llm_provider == "vercel_ai_gateway"
+            else settings.model_id
+        ),
+        "structured_output": result.model_dump(),
+        "paper_only": True,
+        "live_trading": False,
     }
 
 
