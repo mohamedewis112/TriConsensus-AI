@@ -199,3 +199,27 @@ def test_deterministic_risk_engine_has_final_veto_after_rl_action():
     )
     assert decision.approved is False
     assert decision.reason == "daily_loss_limit"
+
+
+def test_observe_only_mode_cannot_enable_enforcement():
+    settings = Settings(
+        _env_file=None,
+        v6_marl_observe=True,
+        v6_marl_enabled=False,
+        v6_marl_shadow_mode=False,
+    )
+    assert settings.v6_marl_observation_active is True
+    assert settings.v6_marl_enforcement_active is False
+    assert settings.v6_marl_effective_shadow_mode is True
+
+
+def test_explicit_v6_enforcement_requires_enabled_and_non_shadow():
+    settings = Settings(
+        _env_file=None,
+        v6_marl_observe=True,
+        v6_marl_enabled=True,
+        v6_marl_shadow_mode=False,
+    )
+    assert settings.v6_marl_observation_active is True
+    assert settings.v6_marl_enforcement_active is True
+    assert settings.v6_marl_effective_shadow_mode is False
