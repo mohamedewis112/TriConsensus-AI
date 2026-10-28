@@ -9,9 +9,14 @@ import pandas as pd
 
 from .account_state import build_account_state
 from .agents import AgentService
-from .binance_live import BinanceGlobalRatioClient, BinanceLiveContextFailure
+from .binance_live import (
+    BinanceGlobalRatioClient,
+    BinanceLiveContextFailure,
+    GlobalLongShortPoint,
+    aggregate_5m_ratio_to_15m,
+)
 from .config import Settings
-from .db import SupabaseRepository
+from .db import PersistenceFailure, SupabaseRepository
 from .execution import PaperExecutionEngine
 from .features import build_features
 from .levels import build_trade_levels
@@ -124,8 +129,29 @@ class PaperDecisionCycle:
             }
 
         try:
-            live_signal = await self.strategy_context.signal(
+            ratio_rows = self.repo.recent_binance_global_ratio(
+                symbol=normalized,
+                observed_at_or_before=observed_at.isoformat(),
+                limit=96,
+            )
+            raw_points = [
+                GlobalLongShortPoint(
+                    timestamp_ms=int(
+                        datetime.fromisoformat(
+                            str(row["observed_at"]).replace("Z", "+00:00")
+                        ).timestamp()
+                        * 1000
+                    ),
+                    ratio=float(row["long_short_ratio"]),
+                    long_account=float(row["long_account"]),
+                    short_account=float(row["short_account"]),
+                )
+                for row in ratio_rows
+            ]
+            live_points = aggregate_5m_ratio_to_15m(raw_points)
+            live_signal = self.strategy_context.signal_from_points(
                 normalized,
+                live_points,
                 low_threshold=float(calibration["low_threshold"]),
                 high_threshold=float(calibration["high_threshold"]),
                 now_ms=int(observed_at.timestamp() * 1000),
@@ -136,6 +162,7 @@ class PaperDecisionCycle:
             )
         except (
             BinanceLiveContextFailure,
+            PersistenceFailure,
             V51CalibrationFailure,
             KeyError,
             TypeError,

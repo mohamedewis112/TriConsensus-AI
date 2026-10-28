@@ -143,6 +143,32 @@ class SupabaseRepository:
             ) from exc
         return rows[0] if rows else None
 
+    def recent_binance_global_ratio(
+        self,
+        *,
+        symbol: str,
+        observed_at_or_before: str,
+        limit: int = 96,
+    ) -> list[dict]:
+        try:
+            rows = (
+                self.client.table("market_binance_global_ratio_5m")
+                .select(
+                    "observed_at,long_short_ratio,long_account,short_account,source"
+                )
+                .eq("symbol", symbol)
+                .lte("observed_at", observed_at_or_before)
+                .order("observed_at", desc=True)
+                .limit(limit)
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(
+                f"Binance global ratio read failed: {exc}"
+            ) from exc
+        return list(reversed(rows or []))
+
     def decision_replay(self, consensus_id: str) -> dict | None:
         try:
             rows = (
