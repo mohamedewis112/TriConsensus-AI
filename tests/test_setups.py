@@ -80,3 +80,40 @@ def test_no_setup_when_conditions_are_ambiguous():
         "resistance_20": 104.0,
     })
     assert generate_setups(features) == []
+
+
+def test_non_overlap_keeps_only_executable_signals():
+    from triconsensus.setup_research import select_non_overlapping
+
+    rows = [
+        {"entry_index": 10, "exit_index": 14, "timestamp_ms": 10},
+        {"entry_index": 12, "exit_index": 15, "timestamp_ms": 12},
+        {"entry_index": 15, "exit_index": 18, "timestamp_ms": 15},
+        {"entry_index": 19, "exit_index": 20, "timestamp_ms": 19},
+    ]
+    selected = select_non_overlapping(rows)
+    assert [row["entry_index"] for row in selected] == [10, 15, 19]
+
+
+def test_execution_diagnostics_reports_break_even_cost():
+    import pytest
+    from triconsensus.setup_research import execution_diagnostics
+
+    rows = [
+        {
+            "gross_return": 0.0020,
+            "net_return": 0.0005,
+            "round_trip_cost": 0.0015,
+        },
+        {
+            "gross_return": 0.0010,
+            "net_return": -0.0005,
+            "round_trip_cost": 0.0015,
+        },
+    ]
+    diagnostics = execution_diagnostics(rows)
+    assert diagnostics["mean_gross_return"] == pytest.approx(0.0015)
+    assert diagnostics["break_even_round_trip_cost_bps"] == pytest.approx(15.0)
+    assert diagnostics["assumed_round_trip_cost_bps"] == pytest.approx(15.0)
+    assert diagnostics["cost_margin_bps"] == pytest.approx(0.0)
+    assert diagnostics["cost_sensitivity"]["10"] == pytest.approx(0.0005)
