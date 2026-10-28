@@ -2,6 +2,10 @@ name: V4.1 Modern API Replication
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "research-trigger/v41-modern-replication.txt"
 
 permissions:
   contents: read
