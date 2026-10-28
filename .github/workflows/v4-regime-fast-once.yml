@@ -1,10 +1,7 @@
 name: V4 Regime Discovery Fast One Shot
 
 on:
-  push:
-    branches: ["feat/v1-foundation"]
-    paths:
-      - "research-trigger/v4-fast.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
