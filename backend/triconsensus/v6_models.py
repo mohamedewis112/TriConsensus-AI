@@ -35,6 +35,7 @@ class PortfolioAction(BaseModel):
     policy_version: str
     reason: str
     shadow_mode: bool = True
+    policy_log_prob: float | None = None
 
     @model_validator(mode="after")
     def validate_weights(self) -> "PortfolioAction":
@@ -72,6 +73,7 @@ class DynamicRiskAction(BaseModel):
     policy_version: str
     reason: str
     shadow_mode: bool = True
+    policy_log_prob: float | None = None
 
 
 class RewardMemoryRecord(BaseModel):
