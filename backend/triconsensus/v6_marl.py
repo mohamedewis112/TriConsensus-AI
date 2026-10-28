@@ -119,27 +119,59 @@ if TORCH_AVAILABLE:
             self.ready = True
             self.policy_version = policy_version
 
-        def portfolio_action(self, state: list[float]) -> np.ndarray:
+        @staticmethod
+        def _bounded_action_with_log_prob(
+            actor: _Actor,
+            state: "torch.Tensor",
+            *,
+            stochastic: bool,
+        ) -> tuple[np.ndarray, float]:
+            dist = actor.distribution(state)
+            latent = dist.sample() if stochastic else dist.mean
+            bounded = torch.sigmoid(latent)
+            log_prob = dist.log_prob(latent).sum(-1)
+            return (
+                bounded.squeeze(0).cpu().numpy(),
+                float(log_prob.squeeze(0).cpu().item()),
+            )
+
+        def portfolio_action_with_log_prob(
+            self,
+            state: list[float],
+            *,
+            stochastic: bool = False,
+        ) -> tuple[np.ndarray, float]:
             if not self.ready:
                 raise MARLPolicyNotReady("MAPPO portfolio policy is not trained/loaded")
             with torch.no_grad():
-                return (
-                    self.portfolio_actor.deterministic(self._tensor(state))
-                    .squeeze(0)
-                    .cpu()
-                    .numpy()
+                return self._bounded_action_with_log_prob(
+                    self.portfolio_actor,
+                    self._tensor(state),
+                    stochastic=stochastic,
                 )
 
-        def risk_action(self, state: list[float]) -> np.ndarray:
+        def risk_action_with_log_prob(
+            self,
+            state: list[float],
+            *,
+            stochastic: bool = False,
+        ) -> tuple[np.ndarray, float]:
             if not self.ready:
                 raise MARLPolicyNotReady("MAPPO risk policy is not trained/loaded")
             with torch.no_grad():
-                return (
-                    self.risk_actor.deterministic(self._tensor(state))
-                    .squeeze(0)
-                    .cpu()
-                    .numpy()
+                return self._bounded_action_with_log_prob(
+                    self.risk_actor,
+                    self._tensor(state),
+                    stochastic=stochastic,
                 )
+
+        def portfolio_action(self, state: list[float]) -> np.ndarray:
+            action, _ = self.portfolio_action_with_log_prob(state)
+            return action
+
+        def risk_action(self, state: list[float]) -> np.ndarray:
+            action, _ = self.risk_action_with_log_prob(state)
+            return action
 
         def value(self, global_state: list[float]) -> float:
             if not self.ready:
@@ -262,6 +294,12 @@ else:
             self.policy_version = "torch_unavailable"
 
         def load_payload(self, *_: Any, **__: Any) -> None:
+            raise MARLDependencyError("install backend/requirements-marl.txt")
+
+        def portfolio_action_with_log_prob(self, *_: Any, **__: Any):
+            raise MARLDependencyError("install backend/requirements-marl.txt")
+
+        def risk_action_with_log_prob(self, *_: Any, **__: Any):
             raise MARLDependencyError("install backend/requirements-marl.txt")
 
         def portfolio_action(self, *_: Any, **__: Any) -> np.ndarray:
