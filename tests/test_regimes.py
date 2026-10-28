@@ -174,3 +174,48 @@ def test_contiguous_mask_rejects_windows_crossing_data_gap():
     assert mask[89] is False or bool(mask[89]) is False
     assert mask[90] is False or bool(mask[90]) is False
     assert mask[110] is True or bool(mask[110]) is True
+
+
+def test_data_quality_gate_blocks_low_coverage_from_policy():
+    from triconsensus.regime_research import apply_data_quality_gate
+
+    candidate = {
+        "regime": "trend_up|mid_vol|momentum_up",
+        "side": "LONG",
+        "qualified": True,
+    }
+    analysis = {
+        "qualified_count": 1,
+        "qualified": [candidate.copy()],
+        "ranked": [candidate.copy()],
+    }
+    gated, gate = apply_data_quality_gate(
+        analysis,
+        {"coverage_ratio": 0.828},
+    )
+    assert gate["passed"] is False
+    assert gated["qualified_count"] == 0
+    assert gated["qualified"] == []
+    assert len(gated["research_candidates"]) == 1
+    assert gated["ranked"][0]["data_quality_blocked"] is True
+
+
+def test_data_quality_gate_keeps_high_coverage_candidate():
+    from triconsensus.regime_research import apply_data_quality_gate
+
+    candidate = {
+        "regime": "trend_up|mid_vol|momentum_up",
+        "side": "LONG",
+        "qualified": True,
+    }
+    analysis = {
+        "qualified_count": 1,
+        "qualified": [candidate.copy()],
+        "ranked": [candidate.copy()],
+    }
+    gated, gate = apply_data_quality_gate(
+        analysis,
+        {"coverage_ratio": 0.97},
+    )
+    assert gate["passed"] is True
+    assert gated["qualified_count"] == 1
