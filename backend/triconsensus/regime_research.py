@@ -220,7 +220,7 @@ async def run_regime_research(
     end_day: date,
     output_dir: Path,
 ) -> dict:
-    candles = await BybitPublicArchiveClient().historical_15m(
+    candles = await BybitKlineArchiveClient().historical_15m(
         symbol,
         days=days,
         end_day=end_day,
