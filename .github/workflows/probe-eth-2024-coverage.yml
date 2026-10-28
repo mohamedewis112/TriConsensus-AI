@@ -1,0 +1,24 @@
+name: Probe ETH 2024 Kline Coverage
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "research-trigger/eth-2024-coverage.txt"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "httpx>=0.28,<1" "pydantic>=2.10,<3" "pydantic-settings>=2.7,<3"
+      - name: Probe monthly coverage
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.archive_coverage_probe --symbol ETHUSDT --year 2024 --start-month 1 --end-month 11
