@@ -57,6 +57,75 @@ def _extract_structured_payload(body: dict) -> dict:
     return _decode_json(content)
 
 
+class VercelAIGatewayProvider(LLMProvider):
+    def __init__(self, settings: Settings) -> None:
+        self.s = settings
+
+    async def structured(self, *, system: str, user: str, schema: type[T]) -> T:
+        token = self.s.vercel_oidc_token
+        if not token:
+            raise LLMFailure("VERCEL_OIDC_TOKEN missing")
+
+        tool = {
+            "type": "function",
+            "function": {
+                "name": TOOL_NAME,
+                "description": "Return the requested structured result exactly matching this schema.",
+                "parameters": schema.model_json_schema(),
+            },
+        }
+        payload = {
+            "model": self.s.vercel_ai_gateway_model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "tools": [tool],
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": TOOL_NAME},
+            },
+            "temperature": 0,
+            "max_tokens": 1200,
+        }
+        headers = {
+            "Authorization": f"Bearer {token.get_secret_value()}",
+            "Content-Type": "application/json",
+        }
+        errors: list[str] = []
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            for attempt in range(2):
+                try:
+                    response = await client.post(
+                        f"{self.s.vercel_ai_gateway_base_url}/chat/completions",
+                        json=payload,
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    parsed = _extract_structured_payload(response.json())
+                    return schema.model_validate(parsed)
+                except (
+                    httpx.HTTPError,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                    ValidationError,
+                ) as exc:
+                    errors.append(f"{self.s.vercel_ai_gateway_model}#{attempt + 1}:{type(exc).__name__}")
+                    if attempt == 0:
+                        await asyncio.sleep(0.5)
+
+        raise LLMFailure("Vercel AI Gateway failed: " + ";".join(errors))
+
+
+def build_llm_provider(settings: Settings) -> LLMProvider:
+    if settings.llm_provider == "vercel_ai_gateway":
+        return VercelAIGatewayProvider(settings)
+    return OpenRouterProvider(settings)
+
+
 class OpenRouterProvider(LLMProvider):
     def __init__(self, settings: Settings) -> None:
         self.s = settings
