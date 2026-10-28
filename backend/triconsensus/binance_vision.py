@@ -105,7 +105,7 @@ class BinanceVisionMetricsClient:
         self,
         base_url: str = "https://data.binance.vision",
         *,
-        concurrency: int = 4,
+        concurrency: int = 8,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._semaphore = asyncio.Semaphore(concurrency)
