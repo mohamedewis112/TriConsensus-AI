@@ -378,6 +378,23 @@ class PaperDecisionCycle:
             try:
                 iv_snapshot = await self.market.implied_volatility(normalized)
                 implied_volatility = float(iv_snapshot["mark_iv"])
+                try:
+                    self.repo.insert(
+                        "v6_volatility_snapshots",
+                        {
+                            "symbol": display_symbol,
+                            "source": str(iv_snapshot["source"]),
+                            "captured_at": str(iv_snapshot["captured_at"]),
+                            "mark_iv": implied_volatility,
+                            "expiry": iv_snapshot.get("expiry"),
+                            "sample_count": int(iv_snapshot.get("sample_count") or 0),
+                            "payload": iv_snapshot,
+                        },
+                    )
+                except PersistenceFailure:
+                    if not self.settings.v6_marl_shadow_mode:
+                        implied_volatility = None
+                        iv_snapshot = None
             except (MarketDataFailure, KeyError, TypeError, ValueError):
                 iv_snapshot = None
 
