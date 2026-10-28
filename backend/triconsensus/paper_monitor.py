@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+import hashlib
+import json
 
 from .config import Settings
-from .db import SupabaseRepository
+from .db import PersistenceFailure, SupabaseRepository
 from .execution import PaperExecutionEngine
 from .market_data import BybitPublicClient, MarketDataFailure
 from .v51_forward import PAPER_EXPERIMENT_VERSION
+from .v6_reward import reward_value
 
 
 @dataclass(frozen=True)
@@ -194,6 +197,84 @@ class PaperTradeMonitor:
                     },
                 },
             )
+
+            if version.startswith("V6"):
+                try:
+                    open_events = [
+                        event
+                        for event in self.repo.trade_events_for_trade(trade["id"])
+                        if event.get("event_type") == "PAPER_OPEN"
+                    ]
+                    open_payload = (
+                        (open_events[0].get("payload") or {}) if open_events else {}
+                    )
+                    adaptive = open_payload.get("v6_adaptive") or {}
+                    if adaptive:
+                        notional = max(float(trade.get("notional_value") or 0), 1e-12)
+                        net_return = float(pnl.net) / notional
+                        max_drawdown = min(
+                            1.0,
+                            abs(min(float(mae), 0.0)) / notional,
+                        )
+                        reward = reward_value(
+                            net_return=net_return,
+                            max_drawdown=max_drawdown,
+                            drawdown_penalty=self.settings.v6_drawdown_penalty,
+                        )
+                        portfolio_action = adaptive.get("portfolio") or {}
+                        dynamic_action = adaptive.get("dynamic_risk") or {}
+                        policy_version = str(
+                            portfolio_action.get("policy_version")
+                            or dynamic_action.get("policy_version")
+                            or "v6-shadow"
+                        )
+                        reward_payload = {
+                            "experiment_id": experiment["id"],
+                            "trade_id": trade["id"],
+                            "symbol": display_symbol,
+                            "policy_version": policy_version,
+                            "state_json": {
+                                "account_state_at_entry": open_payload.get(
+                                    "account_state_at_entry"
+                                )
+                                or {},
+                                "close_reason": signal.reason,
+                                "trade_duration_seconds": duration_seconds(
+                                    str(trade["opened_at"]),
+                                    closed_at,
+                                ),
+                                "mae": mae,
+                                "mfe": mfe,
+                            },
+                            "action_json": adaptive,
+                            "net_return": net_return,
+                            "max_drawdown": max_drawdown,
+                            "reward": reward,
+                            "terminal": True,
+                        }
+                        checksum_raw = json.dumps(
+                            reward_payload,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            default=str,
+                        ).encode()
+                        reward_payload["checksum"] = hashlib.sha256(
+                            checksum_raw
+                        ).hexdigest()
+                        self.repo.insert("marl_reward_memory", reward_payload)
+                except (PersistenceFailure, KeyError, TypeError, ValueError):
+                    # A reward-write failure must never block closing a paper position.
+                    self.repo.insert(
+                        "system_events",
+                        {
+                            "experiment_id": experiment["id"],
+                            "severity": "warning",
+                            "component": "v6_reward_memory",
+                            "event_type": "REWARD_WRITE_FAILED",
+                            "message": "V6 reward memory write failed after paper close",
+                            "payload": {"trade_id": trade["id"]},
+                        },
+                    )
             results.append(
                 {
                     "trade_id": trade["id"],
