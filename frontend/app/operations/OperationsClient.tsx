@@ -58,10 +58,12 @@ function paperStats(snapshot: OperationsSnapshot) {
   const grossLoss = Number(p.gross_loss ?? 0);
   const closed = Number(p.closed_trades ?? 0);
   const wins = Number(p.wins ?? 0);
+  const unrealized = Number(p.unrealized_pnl ?? 0);
   return {
     starting,
     realized,
-    equity: starting + realized,
+    unrealized,
+    equity: starting + realized + unrealized,
     fees: Number(p.fees ?? 0),
     open: Number(p.open_positions ?? 0),
     closed,
@@ -176,7 +178,7 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
           <span className="label">PAPER ACCOUNT</span>
           <strong>{paper ? money(paper.equity) : "—"}</strong>
           <span className={paper && paper.realized < 0 ? "negativeText" : "positiveText"}>
-            {paper ? (paper.realized >= 0 ? "+" : "") + money(paper.realized) + " realized" : "—"}
+            {paper ? (paper.realized >= 0 ? "+" : "") + money(paper.realized) + " realized · " + (paper.unrealized >= 0 ? "+" : "") + money(paper.unrealized) + " unrealized" : "—"}
           </span>
           <div className="financeMini">
             <div><span>Closed</span><strong>{paper?.closed ?? 0}</strong></div>
