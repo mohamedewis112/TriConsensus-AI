@@ -671,6 +671,7 @@ class PaperDecisionCycle:
                 "payload": {
                     **asdict(fill),
                     "account_state_at_entry": account_state,
+                    "v6_adaptive_context": adaptive_context,
                     "v6_adaptive": result.get("v6_adaptive") or {},
                 },
             },
