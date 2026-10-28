@@ -1,10 +1,7 @@
 name: V4 Setup Discovery 2024
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v4-setups-2024.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
