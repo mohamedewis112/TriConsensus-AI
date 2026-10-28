@@ -534,7 +534,7 @@ class PaperTradeMonitor:
                 },
             )
 
-            if version.startswith("V6"):
+            if version.startswith("V6") or self.settings.v6_marl_observation_active:
                 try:
                     if not open_payload:
                         open_events = [
