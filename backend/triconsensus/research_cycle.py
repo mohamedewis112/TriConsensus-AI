@@ -26,7 +26,7 @@ from .v51_forward import (
     V51_MODEL_FAMILY,
 )
 from .v6_agents import DynamicVolatilityRiskAgent, MetaRLPortfolioAdapterAgent
-from .v6_models import VolatilityRiskState
+from .v6_models import RewardMemoryRecord, VolatilityRiskState
 from .v6_reward import build_portfolio_state
 
 
@@ -73,6 +73,7 @@ async def run_live_research_cycle(
     symbol: str,
     vercel_oidc_token: str | None,
     ledger: list[dict] | None = None,
+    reward_memory: list[RewardMemoryRecord] | None = None,
     include_persistence_context: bool = False,
 ) -> dict:
     normalized = symbol.upper().replace("-", "").replace("/", "")
@@ -102,6 +103,7 @@ async def run_live_research_cycle(
             "error": type(exc).__name__,
             "detail": str(exc)[:200],
             "paper_only": True,
+            "live_trading": False,
             "persisted": False,
             "execution_performed": False,
         }
@@ -134,6 +136,7 @@ async def run_live_research_cycle(
             "reason": "frozen_v51_inside_calibrated_deciles",
             "agents_invoked": False,
             "paper_only": True,
+            "live_trading": False,
             "persisted": False,
             "execution_performed": False,
         }
@@ -151,6 +154,7 @@ async def run_live_research_cycle(
             "reason": "market_evidence_unavailable",
             "error": type(exc).__name__,
             "paper_only": True,
+            "live_trading": False,
             "persisted": False,
             "execution_performed": False,
         }
@@ -173,7 +177,7 @@ async def run_live_research_cycle(
     observed_at = datetime.now(UTC)
     account_state = build_account_state(ledger or [], settings, now=observed_at)
     portfolio_state = build_portfolio_state(
-        [],
+        reward_memory or [],
         window=settings.v6_reward_window,
         minimum_warmup_trades_per_asset=settings.v6_min_warmup_trades_per_asset,
         as_of=observed_at,
@@ -251,6 +255,7 @@ async def run_live_research_cycle(
             "reason": "llm_provider_failure",
             "error": type(exc).__name__,
             "paper_only": True,
+            "live_trading": False,
             "persisted": False,
             "execution_performed": False,
         }
@@ -262,6 +267,7 @@ async def run_live_research_cycle(
     candidate = bool(
         raw_outcome in {"LONG", "SHORT"}
         and protocol_direction_match
+        and bool(result.get("full_consensus", False))
         and risk_approved
     )
 
@@ -288,10 +294,11 @@ async def run_live_research_cycle(
         },
         "outcome": raw_outcome if candidate else "NO_TRADE",
         "paper_only": True,
+        "live_trading": False,
         "persisted": False,
         "execution_performed": False,
         "v6_enforcement": False,
-        "provider": "vercel_ai_gateway_oidc",
+        "provider": settings.llm_provider,
         "model_id": settings.vercel_ai_gateway_model,
         "observed_at": observed_at.isoformat(),
     }
