@@ -65,10 +65,10 @@ def test_trade_archive_aggregates_into_15m_ohlcv(tmp_path):
 def test_historical_archive_merges_parallel_days_in_time_order():
     class FakeArchiveClient(BybitPublicArchiveClient):
         async def daily_15m(self, symbol, day):
-            base = int(day.strftime("%d"))
+            day_base = int(day.strftime("%Y%m%d")) * 100_000_000
             return [
                 {
-                    "start_ms": base * 1000,
+                    "start_ms": day_base + i * 900_000,
                     "open": 1.0,
                     "high": 1.0,
                     "low": 1.0,
@@ -76,6 +76,7 @@ def test_historical_archive_merges_parallel_days_in_time_order():
                     "volume": 1.0,
                     "turnover": 1.0,
                 }
+                for i in range(96)
             ]
 
     client = FakeArchiveClient()
