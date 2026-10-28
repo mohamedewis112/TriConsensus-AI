@@ -1,0 +1,63 @@
+{
+  "experiment": "ML-V3-META-LABEL-2026-10-28",
+  "status": "rejected",
+  "methodology": "Deterministic trend/VWAP/momentum setup generator + ML meta-label filter; frozen 30-day disjoint Bybit window ending 2026-09-11",
+  "data_source": "bybit_public_archive",
+  "timeframe": "15m",
+  "history_days": 30,
+  "archive_end_day": "2026-09-11",
+  "round_trip_cost": 0.0015,
+  "conclusion": "Neither BTC nor ETH passed the evidence gate. V3 meta-labeling did not demonstrate a stable positive edge on the disjoint holdout.",
+  "BTCUSDT": {
+    "selected_model_family": "lightgbm",
+    "candidate_count": 999,
+    "candidate_success_rate": 0.35035035035035034,
+    "long_candidates": 542,
+    "short_candidates": 457,
+    "selection": {
+      "folds": 4,
+      "mean_net_return": 0.00231511109301789,
+      "mean_excess_net_return": 0.003634596042535309,
+      "mean_hit_rate": 0.5,
+      "profitable_folds": 2,
+      "beat_baseline_folds": 4,
+      "mean_brier_improvement": -0.36834578705921817
+    },
+    "holdout": {
+      "rows": 199,
+      "trade_count": 5,
+      "hit_rate": 0.2,
+      "mean_net_return": -0.0024067113915885994,
+      "baseline_mean_net_return": -0.0014580235802192562,
+      "excess_net_return": -0.0009486878113693432,
+      "brier_improvement": -0.07496565622644318
+    },
+    "evidence_gate_passed": false
+  },
+  "ETHUSDT": {
+    "selected_model_family": "catboost",
+    "candidate_count": 961,
+    "candidate_success_rate": 0.3631633714880333,
+    "long_candidates": 575,
+    "short_candidates": 386,
+    "selection": {
+      "folds": 4,
+      "mean_net_return": -0.0019329831014810684,
+      "mean_excess_net_return": -0.0011408781846407165,
+      "mean_hit_rate": 0.35,
+      "profitable_folds": 1,
+      "beat_baseline_folds": 2,
+      "mean_brier_improvement": -0.3811049488027172
+    },
+    "holdout": {
+      "rows": 192,
+      "trade_count": 7,
+      "hit_rate": 0,
+      "mean_net_return": -0.011091693306918992,
+      "baseline_mean_net_return": -0.0027015740022329157,
+      "excess_net_return": -0.008390119304686076,
+      "brier_improvement": -0.1556192777282608
+    },
+    "evidence_gate_passed": false
+  }
+}
