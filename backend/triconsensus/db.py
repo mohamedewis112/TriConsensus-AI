@@ -248,12 +248,44 @@ class SupabaseRepository:
             raise PersistenceFailure(f"marl policy read failed: {exc}") from exc
         return rows[0] if rows else None
 
+    def upsert_v6_microstructure_latest(self, payload: dict[str, Any]) -> dict:
+        try:
+            rows = (
+                self.client.table("v6_microstructure_latest")
+                .upsert(payload, on_conflict="venue,symbol")
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(
+                f"microstructure latest upsert failed: {exc}"
+            ) from exc
+        if not rows:
+            raise PersistenceFailure("microstructure latest upsert returned no row")
+        return rows[0]
+
     def recent_v6_microstructure(
         self,
         *,
         symbol: str,
         limit: int = 20,
     ) -> list[dict]:
+        try:
+            latest = (
+                self.client.table("v6_microstructure_latest")
+                .select("*")
+                .eq("symbol", symbol)
+                .order("captured_at")
+                .limit(2)
+                .execute()
+                .data
+            )
+            if latest:
+                return latest
+        except Exception:
+            # Backward-compatible fallback while a deployment is rolling over.
+            pass
+
         try:
             rows = (
                 self.client.table("v6_microstructure_snapshots")
