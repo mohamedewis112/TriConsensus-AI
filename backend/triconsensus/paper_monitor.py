@@ -7,6 +7,7 @@ from .config import Settings
 from .db import SupabaseRepository
 from .execution import PaperExecutionEngine
 from .market_data import BybitPublicClient, MarketDataFailure
+from .v51_forward import PAPER_EXPERIMENT_VERSION
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ class PaperTradeMonitor:
         self.market = BybitPublicClient(settings)
         self.execution = PaperExecutionEngine()
 
-    async def run(self, *, version: str = "V1") -> dict:
+    async def run(self, *, version: str = PAPER_EXPERIMENT_VERSION) -> dict:
         experiment = self.repo.get_experiment(version)
         if experiment is None:
             return {"version": version, "checked": 0, "closed": 0, "results": []}

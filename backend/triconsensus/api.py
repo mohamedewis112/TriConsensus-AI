@@ -13,6 +13,7 @@ from .metrics import calculate_metrics
 from .paper_monitor import PaperTradeMonitor
 from .preflight import run_preflight
 from .security import require_control_key
+from .v51_forward import PAPER_EXPERIMENT_VERSION
 
 app = FastAPI(title="TriConsensus AI API", version="0.1.0")
 market = BybitPublicClient(settings)
@@ -65,7 +66,7 @@ async def paper_cycle(symbol: str) -> dict:
 
 
 @app.post("/v1/paper-monitor", dependencies=[Depends(require_control_key)])
-async def paper_monitor(version: str = "V1") -> dict:
+async def paper_monitor(version: str = PAPER_EXPERIMENT_VERSION) -> dict:
     try:
         return await PaperTradeMonitor(settings).run(version=version)
     except PersistenceFailure as exc:
@@ -73,7 +74,7 @@ async def paper_monitor(version: str = "V1") -> dict:
 
 
 @app.get("/v1/analytics/summary", dependencies=[Depends(require_control_key)])
-async def analytics_summary(version: str = "V1") -> dict:
+async def analytics_summary(version: str = PAPER_EXPERIMENT_VERSION) -> dict:
     try:
         repo = SupabaseRepository(settings)
         experiment = repo.get_experiment(version)
@@ -112,7 +113,7 @@ async def analytics_summary(version: str = "V1") -> dict:
 
 
 @app.get("/v1/trades", dependencies=[Depends(require_control_key)])
-async def trades(version: str = "V1", limit: int = 100) -> dict:
+async def trades(version: str = PAPER_EXPERIMENT_VERSION, limit: int = 100) -> dict:
     if not 1 <= limit <= 500:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
     try:
