@@ -105,7 +105,7 @@ def test_cron_surface_is_single_and_secured():
 
 def test_secondary_runtime_rpcs_are_disabled():
     source = Path(
-        "supabase/migrations/20261028223401_disable_secondary_paper_runtime_rpcs.sql"
+        "supabase/migrations/20261028223549_disable_secondary_paper_runtime_rpcs.sql"
     ).read_text()
     assert "triconsensus_open_paper_trade" in source
     assert "triconsensus_monitor_paper_trade" in source
