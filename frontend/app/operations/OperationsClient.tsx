@@ -98,6 +98,10 @@ function TimelineRow({event}: {event: OpsEvent}) {
           <span className={"opsState " + stateClass(event.state)}>{event.state}</span>
         </div>
         <span>{event.title}</span>
+        <details className="opsDetails">
+          <summary>Inspect event payload</summary>
+          <pre>{JSON.stringify(event.details ?? {}, null, 2)}</pre>
+        </details>
       </div>
     </div>
   );
