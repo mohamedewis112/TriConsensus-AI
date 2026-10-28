@@ -76,3 +76,26 @@ def test_historical_metrics_allows_small_missing_day_fraction():
         )
     )
     assert len(rows) == 9
+
+
+
+def test_parse_metrics_zip_normalizes_2026_start_labels_by_archive_day():
+    from datetime import date
+
+    payload = _zip_bytes(
+        "create_time,symbol,sum_open_interest,sum_open_interest_value,"
+        "count_toptrader_long_short_ratio,sum_toptrader_long_short_ratio,"
+        "count_long_short_ratio,sum_taker_long_short_vol_ratio\n"
+        "2026-06-25 00:00:00,BTCUSDT,100,10000,1.1,1.2,1.05,0.9\n"
+    )
+    old_file_row = parse_metrics_zip(
+        payload,
+        symbol="BTCUSDT",
+        archive_day=date(2026, 6, 24),
+    )[0]
+    new_file_row = parse_metrics_zip(
+        payload,
+        symbol="BTCUSDT",
+        archive_day=date(2026, 6, 25),
+    )[0]
+    assert new_file_row.timestamp_ms - old_file_row.timestamp_ms == 5 * 60 * 1000

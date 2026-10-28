@@ -11,6 +11,10 @@ import zipfile
 import httpx
 
 
+UM_METRICS_START_LABEL_DAY = date(2026, 6, 25)
+FIVE_MINUTES_MS = 5 * 60 * 1000
+
+
 METRIC_COLUMNS = (
     "sum_open_interest",
     "sum_open_interest_value",
@@ -37,7 +41,12 @@ class FuturesMetricRow:
     sum_taker_long_short_vol_ratio: float
 
 
-def parse_metrics_zip(payload: bytes, *, symbol: str) -> list[FuturesMetricRow]:
+def parse_metrics_zip(
+    payload: bytes,
+    *,
+    symbol: str,
+    archive_day: date | None = None,
+) -> list[FuturesMetricRow]:
     try:
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             names = [name for name in archive.namelist() if name.endswith(".csv")]
@@ -61,9 +70,23 @@ def parse_metrics_zip(payload: bytes, *, symbol: str) -> list[FuturesMetricRow]:
                         continue
                     if not all(math.isfinite(value) for value in values.values()):
                         continue
+                    timestamp_ms = int(parsed.timestamp() * 1000)
+                    # Binance USD-M metrics changed from end-labelled to
+                    # start-labelled five-minute periods on 2026-06-25.
+                    # Normalize post-change archive rows to the actual period
+                    # end/availability timestamp so old and new files share
+                    # one time convention. Use archive_day, not parsed time,
+                    # because the 2026-06-24 file also contains a 06-25 00:00
+                    # old-convention row.
+                    if (
+                        archive_day is not None
+                        and archive_day >= UM_METRICS_START_LABEL_DAY
+                    ):
+                        timestamp_ms += FIVE_MINUTES_MS
+
                     rows.append(
                         FuturesMetricRow(
-                            timestamp_ms=int(parsed.timestamp() * 1000),
+                            timestamp_ms=timestamp_ms,
                             symbol=str(row.get("symbol") or symbol),
                             **values,
                         )
@@ -119,7 +142,11 @@ class BinanceVisionMetricsClient:
                             return []
                         response.raise_for_status()
                         payload = response.content
-                    return parse_metrics_zip(payload, symbol=symbol)
+                    return parse_metrics_zip(
+                        payload,
+                        symbol=symbol,
+                        archive_day=day,
+                    )
                 except httpx.HTTPError:
                     if attempt < 2:
                         await asyncio.sleep(0.75 * (2**attempt))

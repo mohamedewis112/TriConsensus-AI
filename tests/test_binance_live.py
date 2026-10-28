@@ -7,6 +7,7 @@ from triconsensus.binance_live import (
     BinanceGlobalRatioClient,
     BinanceLiveContextFailure,
     GlobalLongShortPoint,
+    normalize_global_ratio_timestamp,
 )
 
 
@@ -113,3 +114,11 @@ def test_live_signal_rejects_non_contiguous_ratio_series():
             high_threshold=0.03,
             now_ms=points[-1].timestamp_ms + 15 * 60_000,
         )
+
+
+
+def test_live_timestamp_normalizes_post_2026_start_labels():
+    before = 1782345599999
+    cutoff = 1782345600000
+    assert normalize_global_ratio_timestamp(before) == before
+    assert normalize_global_ratio_timestamp(cutoff) == cutoff + 5 * 60_000

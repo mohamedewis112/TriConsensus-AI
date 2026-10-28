@@ -7,6 +7,16 @@ import time
 import httpx
 
 
+UM_METRICS_START_LABEL_MS = 1782345600000  # 2026-06-25T00:00:00Z
+FIVE_MINUTES_MS = 5 * 60 * 1000
+
+
+def normalize_global_ratio_timestamp(timestamp_ms: int) -> int:
+    if timestamp_ms >= UM_METRICS_START_LABEL_MS:
+        return timestamp_ms + FIVE_MINUTES_MS
+    return timestamp_ms
+
+
 class BinanceLiveContextFailure(RuntimeError):
     pass
 
@@ -90,7 +100,9 @@ class BinanceGlobalRatioClient:
         points: dict[int, GlobalLongShortPoint] = {}
         for row in payload:
             try:
-                timestamp = int(row["timestamp"])
+                timestamp = normalize_global_ratio_timestamp(
+                    int(row["timestamp"])
+                )
                 ratio = float(row["longShortRatio"])
                 long_account = float(row["longAccount"])
                 short_account = float(row["shortAccount"])
