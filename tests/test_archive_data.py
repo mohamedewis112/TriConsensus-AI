@@ -1,3 +1,4 @@
+import asyncio
 import csv
 from datetime import date
 import gzip
@@ -59,3 +60,32 @@ def test_trade_archive_aggregates_into_15m_ohlcv(tmp_path):
     assert first["close"] == 103
     assert first["volume"] == 3
     assert first["turnover"] == pytest.approx(303)
+
+
+def test_historical_archive_merges_parallel_days_in_time_order():
+    class FakeArchiveClient(BybitPublicArchiveClient):
+        async def daily_15m(self, symbol, day):
+            base = int(day.strftime("%d"))
+            return [
+                {
+                    "start_ms": base * 1000,
+                    "open": 1.0,
+                    "high": 1.0,
+                    "low": 1.0,
+                    "close": 1.0,
+                    "volume": 1.0,
+                    "turnover": 1.0,
+                }
+            ]
+
+    client = FakeArchiveClient()
+    candles = asyncio.run(
+        client.historical_15m(
+            "BTCUSDT",
+            days=7,
+            end_day=date(2026, 10, 7),
+        )
+    )
+    assert [row["start_ms"] for row in candles] == sorted(
+        row["start_ms"] for row in candles
+    )
