@@ -2,6 +2,10 @@ name: V4.1 Modern API Replication
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "research-trigger/v41-bytick-replication.txt"
 
 permissions:
   contents: read
@@ -25,6 +29,7 @@ jobs:
       - name: Run frozen V4.1 on disjoint Bybit V5 window
         env:
           PYTHONPATH: backend
+          BYBIT_BASE_URL: https://api.bytick.com
         run: |
           python -m triconsensus.setup_regime_research             --symbol "${{ matrix.symbol }}"             --days 90             --end-date 2026-08-11             --source api             --output-dir "v41-modern/${{ matrix.symbol }}"
       - uses: actions/upload-artifact@v4
