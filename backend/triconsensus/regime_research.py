@@ -138,28 +138,22 @@ def build_regime_observations(
     return asdict(thresholds), observations
 
 
-def analyze_regimes(observations: list[dict], *, folds: int = 4) -> dict:
-    if not observations:
-        raise ValueError("no regime observations")
-
-    timestamps = sorted({int(row["timestamp_ms"]) for row in observations})
-    fold_by_timestamp = dict(zip(timestamps, chronological_fold_ids(len(timestamps), folds), strict=True))
-
+def _summarize_groups(
+    observations: list[dict],
+    *,
+    fold_by_timestamp: dict[int, int],
+    key_builder,
+) -> list[dict]:
     grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for row in observations:
-        grouped[(str(row["regime"]), str(row["side"]))].append(row)
+        grouped[(key_builder(row), str(row["side"]))].append(row)
 
     summaries = []
     for (regime, side), rows in sorted(grouped.items()):
         values = [float(row["net_return"]) for row in rows]
         fold_ids = [fold_by_timestamp[int(row["timestamp_ms"])] for row in rows]
         summaries.append(asdict(summarize_regime(regime, side, values, fold_ids)))
-
-    qualified = [
-        row for row in summaries
-        if row["qualified"]
-    ]
-    ranked = sorted(
+    return sorted(
         summaries,
         key=lambda row: (
             row["qualified"],
@@ -169,11 +163,53 @@ def analyze_regimes(observations: list[dict], *, folds: int = 4) -> dict:
         ),
         reverse=True,
     )
+
+
+def analyze_regimes(observations: list[dict], *, folds: int = 4) -> dict:
+    if not observations:
+        raise ValueError("no regime observations")
+
+    timestamps = sorted({int(row["timestamp_ms"]) for row in observations})
+    fold_by_timestamp = dict(
+        zip(
+            timestamps,
+            chronological_fold_ids(len(timestamps), folds),
+            strict=True,
+        )
+    )
+
+    full = _summarize_groups(
+        observations,
+        fold_by_timestamp=fold_by_timestamp,
+        key_builder=lambda row: str(row["regime"]),
+    )
+    trend_volatility = _summarize_groups(
+        observations,
+        fold_by_timestamp=fold_by_timestamp,
+        key_builder=lambda row: f'{row["trend"]}|{row["volatility"]}',
+    )
+    trend_only = _summarize_groups(
+        observations,
+        fold_by_timestamp=fold_by_timestamp,
+        key_builder=lambda row: str(row["trend"]),
+    )
+    volatility_only = _summarize_groups(
+        observations,
+        fold_by_timestamp=fold_by_timestamp,
+        key_builder=lambda row: str(row["volatility"]),
+    )
+
+    qualified = [row for row in full if row["qualified"]]
     return {
-        "regime_count": len({row["regime"] for row in summaries}),
+        "regime_count": len({row["regime"] for row in full}),
         "qualified_count": len(qualified),
         "qualified": qualified,
-        "ranked": ranked,
+        "ranked": full,
+        "hierarchy": {
+            "trend_volatility": trend_volatility,
+            "trend_only": trend_only,
+            "volatility_only": volatility_only,
+        },
     }
 
 
