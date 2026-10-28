@@ -262,6 +262,21 @@ async def run_regime_research(
     thresholds, observations = build_regime_observations(candles)
     analysis = analyze_regimes(observations)
     data_quality = archive_coverage_stats(candles, requested_days=days)
+    data_quality_gate = {
+        "passed": data_quality["coverage_ratio"] >= 0.90,
+        "minimum_coverage_ratio_for_qualification": 0.90,
+        "exploratory_minimum_coverage_ratio": 0.80,
+    }
+
+    raw_qualified = list(analysis.get("qualified") or [])
+    if not data_quality_gate["passed"]:
+        analysis["research_candidates"] = raw_qualified
+        analysis["qualified"] = []
+        analysis["qualified_count"] = 0
+        for row in analysis.get("ranked") or []:
+            if row.get("qualified"):
+                row["qualified"] = False
+                row["data_quality_blocked"] = True
 
     report = {
         "experiment": "V4-REGIME-DISCOVERY",
@@ -275,6 +290,7 @@ async def run_regime_research(
         "candle_count": len(candles),
         "observation_count": len(observations),
         "data_quality": data_quality,
+        "data_quality_gate": data_quality_gate,
         "gap_safe_windows_only": True,
         "round_trip_cost": 0.0015,
         "barrier_horizon": 12,
