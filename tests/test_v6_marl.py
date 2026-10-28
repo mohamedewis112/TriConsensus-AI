@@ -117,7 +117,7 @@ def test_dynamic_risk_projection_stays_inside_action_bounds():
     assert 0.75 <= action.reward_to_risk_multiplier <= 1.50
     assert 0.0 <= action.trailing_lock_fraction <= 0.90
     assert action.stop_atr_multiplier > 1.5
-    assert action.trailing_lock_fraction >= pytest.approx(0.35)
+    assert action.trailing_lock_fraction >= 0.35
 
 
 def test_cross_venue_adverse_orderbook_can_force_no_trade():
