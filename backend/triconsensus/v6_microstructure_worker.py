@@ -32,6 +32,7 @@ class V6MicrostructureWorker:
         self.bybit = BybitOrderbookStream(settings.bybit_ws_url)
         self.binance = BinanceOrderbookStream(settings.binance_ws_url)
         self.last_persisted_ms: dict[tuple[str, str], int] = {}
+        self.last_latest_ms: dict[tuple[str, str], int] = {}
         self.latest: dict[tuple[str, str], MicrostructureSnapshot] = {}
 
     async def _persist(self, snapshot: MicrostructureSnapshot) -> None:
@@ -40,10 +41,6 @@ class V6MicrostructureWorker:
         self.latest[key] = snapshot
 
         now_ms = int(time.time() * 1000)
-        previous = self.last_persisted_ms.get(key, 0)
-        if now_ms - previous < self.settings.v6_microstructure_persist_interval_ms:
-            return
-
         payload = {
             "venue": snapshot.venue,
             "symbol": display,
@@ -58,16 +55,52 @@ class V6MicrostructureWorker:
         checksum = hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        row = {
-            "symbol": display,
-            "venue": snapshot.venue,
-            "captured_at": datetime.fromtimestamp(
-                snapshot.received_timestamp_ms / 1000,
-                tz=UTC,
-            ).isoformat(),
+        captured_at = datetime.fromtimestamp(
+            snapshot.received_timestamp_ms / 1000,
+            tz=UTC,
+        ).isoformat()
+
+        previous_latest = self.last_latest_ms.get(key, 0)
+        if (
+            now_ms - previous_latest
+            >= self.settings.v6_microstructure_latest_interval_ms
+        ):
+            latest_row = {
+                **payload,
+                "captured_at": captured_at,
+                "payload": {
+                    "collector": "v6_cross_venue_ws",
+                    "state_kind": "latest",
+                    "latest_interval_ms": (
+                        self.settings.v6_microstructure_latest_interval_ms
+                    ),
+                },
+                "checksum": checksum,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+            try:
+                await asyncio.to_thread(
+                    self.repo.upsert_v6_microstructure_latest,
+                    latest_row,
+                )
+                self.last_latest_ms[key] = now_ms
+            except PersistenceFailure:
+                # Missing latest state is fail-closed for any future enforcement.
+                pass
+
+        previous_history = self.last_persisted_ms.get(key, 0)
+        if (
+            now_ms - previous_history
+            < self.settings.v6_microstructure_persist_interval_ms
+        ):
+            return
+
+        history_row = {
             **payload,
+            "captured_at": captured_at,
             "payload": {
                 "collector": "v6_cross_venue_ws",
+                "state_kind": "history",
                 "persist_interval_ms": (
                     self.settings.v6_microstructure_persist_interval_ms
                 ),
@@ -78,7 +111,7 @@ class V6MicrostructureWorker:
             await asyncio.to_thread(
                 self.repo.insert,
                 "v6_microstructure_snapshots",
-                row,
+                history_row,
             )
             self.last_persisted_ms[key] = now_ms
         except PersistenceFailure:
