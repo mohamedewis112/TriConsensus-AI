@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "migration": "20261028143000_add_v6_adaptive_marl.sql",
+  "mode": "paper_shadow_only",
+  "invariants": {
+    "live_money": false,
+    "fail_closed": true,
+    "deterministic_risk_engine_final_veto": true,
+    "marl_can_increase_base_risk": false,
+    "reward_memory_append_only": true,
+    "policy_history_append_only": true,
+    "anonymous_table_access": false,
+    "authenticated_table_access": false
+  },
+  "tables": {
+    "marl_reward_memory": {
+      "purpose": "Immutable terminal reward memory written after a V6 paper trade closes.",
+      "primary_key": "id uuid",
+      "unique": [
+        "trade_id",
+        "checksum"
+      ],
+      "fields": {
+        "experiment_id": "uuid -> experiments.id",
+        "trade_id": "uuid -> paper_trades.id",
+        "symbol": "BTC/USDT | ETH/USDT",
+        "policy_version": "text",
+        "state_json": "jsonb; portfolio_state + volatility_state + account state",
+        "action_json": "jsonb; portfolio + dynamic_risk actions including raw bounded action and old log-prob",
+        "net_return": "numeric",
+        "max_drawdown": "numeric [0,1]",
+        "reward": "numeric = net_return - drawdown_penalty * max_drawdown",
+        "terminal": "boolean",
+        "checksum": "sha256 text",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_action_logs": {
+      "purpose": "Immutable audit of both adaptive agents for each signal snapshot.",
+      "primary_key": "id uuid",
+      "unique": [
+        "signal_snapshot_id, agent_role"
+      ],
+      "fields": {
+        "experiment_id": "uuid -> experiments.id",
+        "market_snapshot_id": "uuid -> market_snapshots.id",
+        "signal_snapshot_id": "uuid -> strategy_signal_snapshots.id",
+        "agent_role": "portfolio | dynamic_risk",
+        "policy_version": "text",
+        "state_json": "jsonb",
+        "action_json": "jsonb",
+        "projected_action_json": "jsonb",
+        "shadow_mode": "boolean",
+        "vetoed_by_risk": "boolean",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_policy_versions": {
+      "purpose": "Append-only MAPPO policy registry; latest active version is used.",
+      "primary_key": "id uuid",
+      "unique": [
+        "agent_role, version"
+      ],
+      "fields": {
+        "agent_role": "mappo_shared | portfolio | dynamic_risk",
+        "version": "text",
+        "status": "candidate | active | rejected",
+        "weights": "jsonb serialized torch state_dict tensors",
+        "training_sample_count": "integer",
+        "config_hash": "sha256 text",
+        "metrics": "jsonb",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_policy_update_runs": {
+      "purpose": "Append-only asynchronous trainer audit events.",
+      "primary_key": "id uuid",
+      "fields": {
+        "agent_role": "text",
+        "source_queue_msg_id": "bigint",
+        "source_reward_id": "uuid -> marl_reward_memory.id",
+        "prior_policy_version": "text",
+        "candidate_policy_version": "text",
+        "sample_count": "integer",
+        "status": "started | trained | skipped | failed",
+        "metrics": "jsonb",
+        "error_code": "text",
+        "created_at": "timestamptz"
+      }
+    },
+    "v6_microstructure_snapshots": {
+      "purpose": "Cross-venue order-book evidence with exchange millisecond timestamps.",
+      "primary_key": "id bigserial",
+      "unique": [
+        "venue, symbol, exchange_timestamp_ms, sequence"
+      ],
+      "fields": {
+        "symbol": "BTC/USDT | ETH/USDT",
+        "venue": "bybit | binance",
+        "captured_at": "timestamptz",
+        "exchange_timestamp_ms": "bigint",
+        "received_timestamp_ms": "bigint",
+        "sequence": "bigint",
+        "bid_depth": "numeric >= 0",
+        "ask_depth": "numeric >= 0",
+        "imbalance": "numeric [-1,1]",
+        "spread_bps": "numeric >= 0",
+        "payload": "jsonb",
+        "checksum": "sha256 text",
+        "created_at": "timestamptz"
+      }
+    },
+    "v6_volatility_snapshots": {
+      "purpose": "Bybit option-implied-volatility evidence used by the neuro-symbolic risk agent.",
+      "primary_key": "id bigserial",
+      "fields": {
+        "symbol": "BTC/USDT | ETH/USDT",
+        "source": "text",
+        "captured_at": "timestamptz",
+        "mark_iv": "numeric >= 0",
+        "expiry": "timestamptz",
+        "sample_count": "integer >= 0",
+        "payload": "jsonb",
+        "created_at": "timestamptz"
+      }
+    }
+  },
+  "async_queue": {
+    "extension": "pgmq",
+    "queue": "triconsensus_marl_rewards",
+    "producer": "AFTER INSERT trigger on marl_reward_memory",
+    "consumer_rpc": "v6_dequeue_marl_rewards(p_vt,p_qty)",
+    "archive_rpc": "v6_archive_marl_reward(p_msg_id)",
+    "execute_role": "service_role only",
+    "decision_path_blocking": false
+  },
+  "reward": {
+    "formula": "reward = net_return - lambda_dd * max_drawdown",
+    "default_lambda_dd": 2,
+    "net_return_basis": "realized paper PnL / entry notional",
+    "drawdown_basis": "absolute MAE / entry notional"
+  }
+}
