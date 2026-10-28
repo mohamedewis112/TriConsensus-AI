@@ -86,3 +86,8 @@ While a dedicated Python/Torch runtime is unavailable, Supabase also runs an obs
 - Stops automatically if an active `mappo_shared` policy appears, because neural inference then belongs to the Python/Torch runtime
 
 The observer is authenticated with a separate random token stored in Supabase Vault. Its action rows are shadow observations only and cannot alter the frozen V5.1 protocol or deterministic risk authority.
+
+
+## Vercel research runtime region
+
+The isolated `triconsensus-runtime-preview` FastAPI project uses the `cdg1` function region for the read-only research runtime. This avoids the Binance Futures geo restriction observed from `iad1` while preserving the frozen V5.1 protocol. Region selection is an infrastructure setting only; it must not change thresholds, lag, horizon, cost, or signal semantics.
