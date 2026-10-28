@@ -1,0 +1,1 @@
+One-shot fast V4 regime discovery using bounded parallel Bybit archive downloads.
