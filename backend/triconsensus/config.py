@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     vercel_ai_gateway_base_url: str = "https://ai-gateway.vercel.sh/v1"
     vercel_ai_gateway_model: str = "nvidia/nemotron-3.5-lightning-free"
     vercel_oidc_token: SecretStr | None = None
+    triconsensus_runtime_gateway_url: str | None = None
 
     supabase_url: str | None = None
     supabase_secret_key: SecretStr | None = None
