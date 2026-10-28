@@ -15,6 +15,18 @@ from .derivatives_evidence import HORIZONS, score_feature
 from .kline_archive import BybitKlineArchiveClient, archive_coverage_stats
 
 
+PURE_DERIVATIVES_FEATURES = (
+    "oi_change_1h",
+    "oi_change_4h",
+    "global_long_short_log",
+    "global_long_short_change_1h",
+    "top_account_long_short_log",
+    "top_position_long_short_log",
+    "top_vs_global_positioning",
+    "taker_long_short_log",
+    "taker_long_short_change_1h",
+)
+
 FEATURE_COLUMNS = (
     "price_return_1h",
     "price_return_4h",
@@ -107,6 +119,12 @@ def build_cross_venue_frame(
         ),
     }
 
+    # Conservative availability guard: a decision at a Bybit candle close may
+    # only use derivatives context from the previous completed 15m bucket.
+    # This removes boundary/publication-timing ambiguity and prevents accidental
+    # same-close leakage from cross-venue metrics.
+    frame[context_columns] = frame[context_columns].shift(1)
+
     frame["price_return_1h"] = frame["close"].pct_change(4)
     frame["price_return_4h"] = frame["close"].pct_change(16)
     frame["oi_change_1h"] = frame["sum_open_interest"].pct_change(4)
@@ -172,9 +190,16 @@ def analyze_cross_venue(frame: pd.DataFrame) -> dict:
         reverse=True,
     )
     qualified = [row for row in scores if row["qualified"]]
+    pure_qualified = [
+        row
+        for row in qualified
+        if row["feature"] in PURE_DERIVATIVES_FEATURES
+    ]
     return {
         "qualified_count": len(qualified),
         "qualified": qualified,
+        "pure_qualified_count": len(pure_qualified),
+        "pure_qualified": pure_qualified,
         "ranked": scores,
     }
 
@@ -232,6 +257,9 @@ async def run_cross_venue_screen(
         "horizons_candles": list(HORIZONS),
         "horizons_minutes": [h * 15 for h in HORIZONS],
         "round_trip_cost": 0.0015,
+        "context_execution_lag_candles": 1,
+        "context_execution_lag_minutes": 15,
+        "pure_derivatives_features": list(PURE_DERIVATIVES_FEATURES),
         "qualification": {
             "minimum_abs_mean_rank_ic": 0.03,
             "minimum_same_sign_folds": 3,
