@@ -3,6 +3,9 @@ from datetime import UTC, date, datetime
 import pytest
 
 from triconsensus.binance_live import V51LiveSignal
+from triconsensus.config import Settings
+from triconsensus.cycle import PaperDecisionCycle
+from triconsensus.db import SupabaseRepository
 from triconsensus.v51_forward import (
     V51CalibrationFailure,
     V51_MODEL_FAMILY,
@@ -14,6 +17,11 @@ from triconsensus.v51_forward_calibration import (
     protocol_hash,
 )
 from triconsensus.v51_rule_gate import RuleThresholds
+
+
+FROZEN_PAPER_EXPERIMENT_CONFIG_HASH = (
+    "b76546273434b348543fb4cd92d86ac0842e8b48c374fcaa83f37c8e08cfc2d0"
+)
 
 
 def calibration():
@@ -76,3 +84,12 @@ def test_forward_calibration_freezes_60_day_window():
     assert report["forward_test_window"]["days"] == FORWARD_TEST_DAYS
     assert report["forward_test_window"]["start"] == "2026-10-27"
     assert report["expires_at"] == datetime(2026, 12, 26, tzinfo=UTC).isoformat()
+
+
+def test_v51_paper_experiment_runtime_config_is_frozen():
+    cycle = object.__new__(PaperDecisionCycle)
+    cycle.settings = Settings(_env_file=None)
+
+    digest = SupabaseRepository.config_hash(cycle.experiment_config())
+
+    assert digest == FROZEN_PAPER_EXPERIMENT_CONFIG_HASH
