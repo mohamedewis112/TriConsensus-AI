@@ -274,6 +274,7 @@ class DynamicVolatilityRiskAgent:
             policy_version=action.policy_version,
             reason=";".join(reasons),
             shadow_mode=self.shadow_mode,
+            policy_log_prob=action.policy_log_prob,
         )
 
     def decide(self, state: VolatilityRiskState) -> DynamicRiskAction:
