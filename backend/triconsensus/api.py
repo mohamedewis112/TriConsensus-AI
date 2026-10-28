@@ -17,6 +17,8 @@ from .llm import LLMFailure, build_llm_provider
 from .market_data import BybitPublicClient, MarketDataFailure
 from .metrics import calculate_metrics
 from .paper_monitor import PaperTradeMonitor
+from .paper_runtime import PaperRuntimeFailure, PaperRuntimeService
+from .runtime_gateway import RuntimeGatewayFailure
 from .paper_runtime import (
     PaperRuntimeGatewayFailure,
     PaperRuntimeService,
@@ -253,6 +255,50 @@ async def paper_runtime_status(request: Request) -> dict:
             if trade.get("status") == "open"
         ],
     }
+
+
+@app.get("/v1/runtime-status")
+async def paper_runtime_status(request: Request) -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        return await PaperRuntimeService(
+            settings,
+            vercel_oidc_token=oidc_token,
+        ).status()
+    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
+        raise HTTPException(status_code=503, detail=f"RUNTIME_UNAVAILABLE: {exc}") from exc
+
+
+@app.post("/v1/runtime-cycle/{symbol}")
+async def paper_runtime_cycle(symbol: str, request: Request) -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        return await PaperRuntimeService(
+            settings,
+            vercel_oidc_token=oidc_token,
+        ).run_symbol(symbol=symbol)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
+        raise HTTPException(status_code=503, detail=f"NO_TRADE: {exc}") from exc
+
+
+@app.post("/v1/runtime-monitor")
+async def paper_runtime_monitor(request: Request) -> dict:
+    if settings.app_env.lower() not in {"development", "preview", "staging"}:
+        raise HTTPException(status_code=404, detail="not found")
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        return await PaperRuntimeService(
+            settings,
+            vercel_oidc_token=oidc_token,
+        ).monitor()
+    except (PaperRuntimeFailure, RuntimeGatewayFailure) as exc:
+        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc
 
 
 @app.get("/v1/preflight", dependencies=[Depends(require_control_key)])
