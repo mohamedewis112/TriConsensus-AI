@@ -80,3 +80,37 @@ def test_regime_gate_can_qualify_repeated_positive_edge():
 def test_bootstrap_lcb_is_deterministic():
     values = [0.001, 0.002, 0.003, 0.004] * 20
     assert bootstrap_lcb(values) == bootstrap_lcb(values)
+
+
+def test_vectorized_regime_feature_frame_matches_required_columns():
+    import pandas as pd
+    from triconsensus.regime_research import build_regime_feature_frame
+
+    candles = []
+    for i in range(180):
+        close = 100 + i * 0.1
+        candles.append({
+            "start_ms": i * 900000,
+            "open": close - 0.05,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "close": close,
+            "volume": 100 + (i % 10),
+            "turnover": close * (100 + (i % 10)),
+        })
+
+    frame = build_regime_feature_frame(candles)
+    assert len(frame) == 180
+    for column in [
+        "ema_20",
+        "ema_50",
+        "rsi_14",
+        "atr_14",
+        "adx_14",
+        "roc_10",
+        "realized_vol_20",
+        "macd_hist",
+        "vwap",
+    ]:
+        assert column in frame.columns
+    assert pd.notna(frame.iloc[-1]["atr_14"])
