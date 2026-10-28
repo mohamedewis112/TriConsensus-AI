@@ -4,13 +4,15 @@ import argparse
 import asyncio
 from collections import defaultdict
 from dataclasses import asdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 import json
 from pathlib import Path
 
 import numpy as np
 
+from .config import settings
 from .kline_archive import BybitKlineArchiveClient, archive_coverage_stats
+from .market_data import BybitPublicClient
 from .regime_research import (
     _feature_dict,
     build_regime_feature_frame,
@@ -222,17 +224,56 @@ def analyze_setup_regimes(observations: list[dict]) -> dict:
     }
 
 
+def research_window_ms(*, days: int, end_day: date) -> tuple[int, int]:
+    if days < 1:
+        raise ValueError("days must be positive")
+    first_day = end_day - timedelta(days=days - 1)
+    start_dt = datetime.combine(first_day, time.min, tzinfo=UTC)
+    end_dt = datetime.combine(
+        end_day + timedelta(days=1),
+        time.min,
+        tzinfo=UTC,
+    ) - timedelta(milliseconds=1)
+    return int(start_dt.timestamp() * 1000), int(end_dt.timestamp() * 1000)
+
+
+async def load_research_candles(
+    *,
+    symbol: str,
+    days: int,
+    end_day: date,
+    source: str,
+) -> list[dict]:
+    if source == "archive":
+        return await BybitKlineArchiveClient().historical_15m(
+            symbol,
+            days=days,
+            end_day=end_day,
+        )
+    if source == "api":
+        start_ms, end_ms = research_window_ms(days=days, end_day=end_day)
+        return await BybitPublicClient(settings).historical_klines(
+            symbol,
+            "15m",
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+    raise ValueError(f"unsupported research source: {source}")
+
+
 async def run_setup_regime_research(
     *,
     symbol: str,
     days: int,
     end_day: date,
     output_dir: Path,
+    source: str = "archive",
 ) -> dict:
-    candles = await BybitKlineArchiveClient().historical_15m(
-        symbol,
+    candles = await load_research_candles(
+        symbol=symbol,
         days=days,
         end_day=end_day,
+        source=source,
     )
     quality = archive_coverage_stats(candles, requested_days=days)
     if float(quality["coverage_ratio"]) < 0.90:
@@ -252,6 +293,7 @@ async def run_setup_regime_research(
         "timeframe": "15m",
         "archive_end_day": end_day.isoformat(),
         "history_days": days,
+        "data_source": source,
         "history_start_ms": int(candles[0]["start_ms"]),
         "history_end_ms": int(candles[-1]["start_ms"]),
         "candle_count": len(candles),
@@ -297,6 +339,11 @@ def main() -> None:
     parser.add_argument("--days", type=int, required=True)
     parser.add_argument("--end-date", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--source",
+        choices=["archive", "api"],
+        default="archive",
+    )
     args = parser.parse_args()
 
     report = asyncio.run(
@@ -305,6 +352,7 @@ def main() -> None:
             days=args.days,
             end_day=date.fromisoformat(args.end_date),
             output_dir=Path(args.output_dir),
+            source=args.source,
         )
     )
     print(json.dumps(report, indent=2, sort_keys=True))
