@@ -189,6 +189,10 @@ create trigger marl_reward_memory_enqueue
 after insert on public.marl_reward_memory
 for each row execute function private.enqueue_marl_reward();
 
+grant usage on schema pgmq to service_role;
+grant execute on function pgmq.read(text,integer,integer,jsonb) to service_role;
+grant execute on function pgmq.archive(text,bigint) to service_role;
+
 create or replace function public.v6_dequeue_marl_rewards(
   p_vt integer default 300,
   p_qty integer default 32
@@ -201,16 +205,17 @@ returns table(
   message jsonb
 )
 language sql
-security definer
+security invoker
 set search_path = pg_catalog, pgmq
-as $$
+as $
   select r.msg_id, r.read_ct, r.enqueued_at, r.vt, r.message
   from pgmq.read(
     'triconsensus_marl_rewards',
     greatest(30, least(p_vt, 3600)),
-    greatest(1, least(p_qty, 128))
+    greatest(1, least(p_qty, 128)),
+    '{}'::jsonb
   ) r;
-$$;
+$;
 revoke all on function public.v6_dequeue_marl_rewards(integer,integer)
   from public, anon, authenticated;
 grant execute on function public.v6_dequeue_marl_rewards(integer,integer)
@@ -219,7 +224,7 @@ grant execute on function public.v6_dequeue_marl_rewards(integer,integer)
 create or replace function public.v6_archive_marl_reward(p_msg_id bigint)
 returns boolean
 language sql
-security definer
+security invoker
 set search_path = pg_catalog, pgmq
 as $$
   select pgmq.archive('triconsensus_marl_rewards', p_msg_id);
