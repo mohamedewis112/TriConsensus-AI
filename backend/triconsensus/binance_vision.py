@@ -172,9 +172,35 @@ class BinanceVisionMetricsClient:
             first_day + timedelta(days=offset)
             for offset in range(days)
         ]
-        results = await asyncio.gather(
-            *(self.daily_metrics(symbol, day) for day in requested)
-        )
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(45.0, connect=15.0),
+            follow_redirects=True,
+            headers={"User-Agent": "TriConsensus-AI/0.1 research"},
+        ) as client:
+            async def fetch_day(day: date) -> list[FuturesMetricRow]:
+                url = self.daily_url(symbol, day)
+                async with self._semaphore:
+                    for attempt in range(3):
+                        try:
+                            response = await client.get(url)
+                            if response.status_code == 404:
+                                return []
+                            response.raise_for_status()
+                            return parse_metrics_zip(
+                                response.content,
+                                symbol=symbol,
+                                archive_day=day,
+                            )
+                        except httpx.HTTPError:
+                            if attempt < 2:
+                                await asyncio.sleep(0.75 * (2**attempt))
+                                continue
+                            return []
+                    return []
+
+            results = await asyncio.gather(
+                *(fetch_day(day) for day in requested)
+            )
 
         rows_by_ts: dict[int, FuturesMetricRow] = {}
         missing_days = 0
