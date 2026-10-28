@@ -99,6 +99,51 @@ def horizon_expired(
     return duration_seconds(opened_at, now) >= horizon_minutes * 60
 
 
+def _frame(candles: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame(candles)[["open", "high", "low", "close", "volume"]]
+
+
+def project_live_levels(
+    trade: dict,
+    *,
+    atr: float,
+    action: DynamicRiskAction,
+    minimum_risk_reward: float,
+) -> tuple[float, float]:
+    """Project a fresh V6 risk action without ever widening post-entry loss."""
+    if atr <= 0:
+        raise ValueError("ATR must be positive")
+    entry = float(trade["actual_entry"])
+    old_stop = float(trade["stop_loss"])
+    old_tp = float(trade["take_profit_1"])
+    stop_distance = atr * float(action.stop_atr_multiplier)
+    rr = max(
+        minimum_risk_reward,
+        minimum_risk_reward * float(action.reward_to_risk_multiplier),
+    )
+    target_distance = stop_distance * rr
+
+    if trade["side"] == "LONG":
+        candidate_stop = entry - stop_distance
+        candidate_tp = entry + target_distance
+        stop = max(old_stop, candidate_stop)
+        tp = min(old_tp, candidate_tp)
+        if not (stop < entry < tp):
+            return old_stop, old_tp
+        return stop, tp
+
+    if trade["side"] == "SHORT":
+        candidate_stop = entry + stop_distance
+        candidate_tp = entry - target_distance
+        stop = min(old_stop, candidate_stop)
+        tp = max(old_tp, candidate_tp)
+        if not (tp < entry < stop):
+            return old_stop, old_tp
+        return stop, tp
+
+    raise ValueError("invalid side")
+
+
 class PaperTradeMonitor:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
