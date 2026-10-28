@@ -237,6 +237,30 @@ export async function getTrades() {
   };
 }
 
-export async function getReplay(_id: string): Promise<Record<string, unknown> | null> {
-  return null;
+export async function getReplay(id: string): Promise<Record<string, unknown> | null> {
+  const base = process.env.TRICONSENSUS_SUPABASE_URL;
+  const publishable = process.env.TRICONSENSUS_SUPABASE_PUBLISHABLE_KEY;
+  const token = process.env.TRICONSENSUS_DASHBOARD_TOKEN;
+  if (!base || !publishable || !token) return null;
+
+  try {
+    const response = await fetch(
+      base.replace(/\/$/, "") + "/rest/v1/rpc/triconsensus_replay",
+      {
+        method: "POST",
+        headers: {
+          apikey: publishable,
+          Authorization: "Bearer " + publishable,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({p_token: token, p_consensus_id: id}),
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+    const replay = (await response.json()) as Record<string, unknown>;
+    return Object.keys(replay).length ? replay : null;
+  } catch {
+    return null;
+  }
 }
