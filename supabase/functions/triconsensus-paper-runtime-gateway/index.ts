@@ -4,8 +4,10 @@ import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.1.0";
 
 const ISSUER = "https://oidc.vercel.com/smart-media1";
 const AUDIENCE = "https://vercel.com/smart-media1";
-const SUBJECT =
-  "owner:smart-media1:project:triconsensus-runtime-preview:environment:preview";
+const SUBJECTS = new Set([
+  "owner:smart-media1:project:triconsensus-runtime-preview:environment:preview",
+  "owner:smart-media1:project:triconsensus-runtime-preview:environment:production",
+]);
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`));
 const INTERNAL_RPC_TOKEN = "internal-service-role";
 
@@ -14,12 +16,11 @@ async function authorize(req: Request): Promise<boolean> {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return false;
   try {
-    await jwtVerify(token, JWKS, {
+    const { payload } = await jwtVerify(token, JWKS, {
       issuer: ISSUER,
       audience: AUDIENCE,
-      subject: SUBJECT,
     });
-    return true;
+    return SUBJECTS.has(String(payload.sub || ""));
   } catch (error) {
     console.error("vercel_oidc_rejected", {
       name: error instanceof Error ? error.name : "unknown",
