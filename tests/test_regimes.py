@@ -145,3 +145,9 @@ def test_hierarchical_regime_analysis_preserves_broad_views():
     assert report["qualified"][0]["side"] == "LONG"
     assert report["hierarchy"]["trend_only"][0]["regime"] == "trend_up"
     assert "trend_volatility" in report["hierarchy"]
+
+
+def test_regime_research_has_resolved_data_client():
+    import triconsensus.regime_research as research
+
+    assert research.BybitKlineArchiveClient is not None
