@@ -87,3 +87,19 @@ def test_setup_feature_bundle_satisfies_frozen_generator():
     features = _setup_features(frame, len(frame) - 1)
     assert "rsi_14" in features
     generate_setups(features)
+
+
+def test_research_window_ms_is_exact_and_inclusive():
+    from datetime import UTC, date, datetime
+
+    from triconsensus.setup_regime_research import research_window_ms
+
+    start_ms, end_ms = research_window_ms(
+        days=90,
+        end_day=date(2026, 8, 11),
+    )
+    start = datetime.fromtimestamp(start_ms / 1000, tz=UTC)
+    end = datetime.fromtimestamp(end_ms / 1000, tz=UTC)
+
+    assert start.isoformat() == "2026-05-14T00:00:00+00:00"
+    assert end.isoformat() == "2026-08-11T23:59:59.999000+00:00"
