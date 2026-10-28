@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
+import hmac
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -15,6 +17,10 @@ from .llm import LLMFailure, build_llm_provider
 from .market_data import BybitPublicClient, MarketDataFailure
 from .metrics import calculate_metrics
 from .paper_monitor import PaperTradeMonitor
+from .paper_runtime import (
+    PaperRuntimeGatewayFailure,
+    PaperRuntimeService,
+)
 from .preflight import run_preflight
 from .research_cycle import run_live_research_cycle
 from .security import require_control_key
@@ -171,6 +177,82 @@ async def research_cycle(symbol: str, request: Request) -> dict:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+
+def _require_cron_secret(request: Request) -> None:
+    secret = os.getenv("CRON_SECRET") or ""
+    auth = request.headers.get("authorization") or ""
+    expected = f"Bearer {secret}"
+    if not secret or not hmac.compare_digest(auth, expected):
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+
+@app.get("/v1/runtime/cron")
+async def paper_runtime_cron(request: Request) -> dict:
+    _require_cron_secret(request)
+    if settings.trading_mode != "paper" or settings.v6_marl_enforcement_active:
+        raise HTTPException(status_code=503, detail="paper runtime safety invariant failed")
+
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    try:
+        service = PaperRuntimeService(settings)
+        monitor_result = await service.monitor()
+    except PaperRuntimeGatewayFailure as exc:
+        raise HTTPException(status_code=503, detail=f"NO_ACTION: {exc}") from exc
+
+    cycles: list[dict] = []
+    for symbol in ("BTCUSDT", "ETHUSDT"):
+        try:
+            cycles.append(
+                await service.run_symbol(
+                    symbol=symbol,
+                    vercel_oidc_token=oidc_token,
+                )
+            )
+        except (PaperRuntimeGatewayFailure, LLMFailure, MarketDataFailure, ValueError) as exc:
+            cycles.append(
+                {
+                    "symbol": symbol,
+                    "outcome": "NO_TRADE",
+                    "reason": "paper_runtime_failure",
+                    "error": type(exc).__name__,
+                    "paper_only": True,
+                    "live_trading": False,
+                    "persisted": False,
+                }
+            )
+
+    return {
+        "status": "COMPLETED",
+        "paper_only": True,
+        "live_trading": False,
+        "v6_enforcement": False,
+        "monitor": monitor_result,
+        "cycles": cycles,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@app.get("/v1/runtime/status")
+async def paper_runtime_status(request: Request) -> dict:
+    _require_cron_secret(request)
+    try:
+        snapshot = await PaperRuntimeService(settings).gateway.dashboard_snapshot()
+    except PaperRuntimeGatewayFailure as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "paper_only": True,
+        "live_trading": False,
+        "v6_enforcement": False,
+        "experiment": snapshot.get("experiment") or {},
+        "execution_counts": snapshot.get("execution_counts") or {},
+        "open_trades": [
+            trade
+            for trade in (snapshot.get("paper_trades") or [])
+            if trade.get("status") == "open"
+        ],
+    }
 
 
 @app.get("/v1/preflight", dependencies=[Depends(require_control_key)])
