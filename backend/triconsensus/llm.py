@@ -58,12 +58,15 @@ def _extract_structured_payload(body: dict) -> dict:
 
 
 class VercelAIGatewayProvider(LLMProvider):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, oidc_token: str | None = None) -> None:
         self.s = settings
+        self.oidc_token = oidc_token
 
     async def structured(self, *, system: str, user: str, schema: type[T]) -> T:
-        token = self.s.vercel_oidc_token
-        if not token:
+        token_value = self.oidc_token
+        if not token_value and self.s.vercel_oidc_token:
+            token_value = self.s.vercel_oidc_token.get_secret_value()
+        if not token_value:
             raise LLMFailure("VERCEL_OIDC_TOKEN missing")
 
         tool = {
@@ -89,7 +92,7 @@ class VercelAIGatewayProvider(LLMProvider):
             "max_tokens": 1200,
         }
         headers = {
-            "Authorization": f"Bearer {token.get_secret_value()}",
+            "Authorization": f"Bearer {token_value}",
             "Content-Type": "application/json",
         }
         errors: list[str] = []
@@ -120,9 +123,13 @@ class VercelAIGatewayProvider(LLMProvider):
         raise LLMFailure("Vercel AI Gateway failed: " + ";".join(errors))
 
 
-def build_llm_provider(settings: Settings) -> LLMProvider:
+def build_llm_provider(
+    settings: Settings,
+    *,
+    vercel_oidc_token: str | None = None,
+) -> LLMProvider:
     if settings.llm_provider == "vercel_ai_gateway":
-        return VercelAIGatewayProvider(settings)
+        return VercelAIGatewayProvider(settings, oidc_token=vercel_oidc_token)
     return OpenRouterProvider(settings)
 
 
