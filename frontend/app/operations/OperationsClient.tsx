@@ -257,6 +257,37 @@ export default function OperationsClient({initial}: {initial: OperationsSnapshot
           </article>
 
           <article className="panel">
+            <span className="label">EXECUTION GATE</span>
+            <div className="safetyGrid">
+              <span>Consensus</span><strong>{String(data?.latest_consensus?.outcome ?? "NONE")}</strong>
+              <span>Full consensus</span><strong>{data?.latest_consensus?.full_consensus === true ? "YES" : "NO"}</strong>
+              <span>Risk engine</span><strong>{data?.latest_risk?.approved === true ? "APPROVED" : data?.latest_risk?.approved === false ? "VETO" : "NOT RUN"}</strong>
+              <span>Paper positions</span><strong>{data?.open_trades?.length ?? 0}</strong>
+            </div>
+          </article>
+
+          <article className="panel">
+            <span className="label">OPEN PAPER POSITIONS</span>
+            {data?.open_trades?.length ? (
+              <div className="agentStateList">
+                {data.open_trades.map((trade, index) => (
+                  <div key={String(trade.id ?? index)}>
+                    <span>{String(trade.symbol ?? "—")} · {String(trade.side ?? "—")}</span>
+                    <strong className="stateGood">OPEN</strong>
+                    <small>
+                      Entry {String(trade.actual_entry ?? trade.requested_entry ?? "—")} ·
+                      SL {String(trade.stop_loss ?? "—")} ·
+                      TP {String(trade.take_profit_1 ?? "—")}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="refreshStamp">No open paper positions.</div>
+            )}
+          </article>
+
+          <article className="panel">
             <span className="label">LAST REFRESH</span>
             <div className="refreshStamp">{data?.generated_at ? new Date(data.generated_at).toLocaleString() : "—"}</div>
           </article>
