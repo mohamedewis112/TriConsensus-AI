@@ -40,6 +40,10 @@ jobs:
           else
             END_DATE="$(tr -d '[:space:]' < research-trigger/v51-forward-calibration.txt)"
           fi
+          if ! [[ "$END_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "invalid calibration_end_date: $END_DATE" >&2
+            exit 2
+          fi
           python -m triconsensus.v51_forward_calibration \
             --symbol "${{ matrix.symbol }}" \
             --end-date "$END_DATE" \
