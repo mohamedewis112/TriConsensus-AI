@@ -50,8 +50,10 @@ class Settings(BaseSettings):
     max_realized_volatility_20: float = Field(default=0.08, gt=0, le=1)
     max_market_data_age_ms: int = Field(default=5000, ge=250)
 
-    # V6 adaptive MARL runs in shadow mode by default. It cannot increase the
-    # deterministic V5.1 risk ceiling and must fail closed when enforcement is on.
+    # V6 observation is independent from enforcement. Observation may collect
+    # shadow states/actions/rewards while V6_MARL_ENABLED remains false.
+    # Enforcement is active only when enabled=true AND shadow_mode=false.
+    v6_marl_observe: bool = True
     v6_marl_enabled: bool = False
     v6_marl_shadow_mode: bool = True
     v6_reward_window: int = Field(default=40, ge=20, le=40)
@@ -77,6 +79,20 @@ class Settings(BaseSettings):
         if self.v6_marl_enabled and not self.v6_marl_shadow_mode and self.trading_mode != TradingMode.PAPER:
             raise ValueError("V6 enforcement is allowed only in paper mode")
         return self
+
+    @property
+    def v6_marl_observation_active(self) -> bool:
+        return bool(self.v6_marl_observe or self.v6_marl_enabled)
+
+    @property
+    def v6_marl_enforcement_active(self) -> bool:
+        return bool(self.v6_marl_enabled and not self.v6_marl_shadow_mode)
+
+    @property
+    def v6_marl_effective_shadow_mode(self) -> bool:
+        # A disabled enforcement flag can never be bypassed by setting
+        # V6_MARL_SHADOW_MODE=false accidentally.
+        return not self.v6_marl_enforcement_active
 
 
 settings = Settings()
