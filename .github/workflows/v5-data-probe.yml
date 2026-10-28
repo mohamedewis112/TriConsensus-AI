@@ -1,0 +1,31 @@
+name: V5 Derivatives Data Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install probe dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install             "httpx>=0.28,<1"             "pydantic>=2.10,<3"             "pydantic-settings>=2.7,<3"
+
+      - name: Probe derivatives coverage
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.v5_data_probe             --symbol "${{ matrix.symbol }}"             --days 7             --end-date 2024-11-30
