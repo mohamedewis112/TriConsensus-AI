@@ -169,6 +169,20 @@ class SupabaseRepository:
             ) from exc
         return list(reversed(rows or []))
 
+    def trade_events_for_trade(self, trade_id: str) -> list[dict]:
+        try:
+            rows = (
+                self.client.table("trade_events")
+                .select("*")
+                .eq("trade_id", trade_id)
+                .order("event_time")
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            raise PersistenceFailure(f"trade event read failed: {exc}") from exc
+        return rows or []
+
     def recent_marl_reward_memory(self, *, limit: int = 80) -> list[dict]:
         try:
             rows = (
