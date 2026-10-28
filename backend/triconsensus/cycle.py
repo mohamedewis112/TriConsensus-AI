@@ -142,14 +142,13 @@ class PaperDecisionCycle:
                         "version": "V6",
                         "architecture": "constrained_mappo_neuro_symbolic",
                         "shadow_mode": self.settings.v6_marl_effective_shadow_mode,
-                        "observe_only": not self.settings.v6_marl_enabled,
                         "reward_window": self.settings.v6_reward_window,
                         "warmup_trades_per_asset": self.settings.v6_min_warmup_trades_per_asset,
                         "drawdown_penalty": self.settings.v6_drawdown_penalty,
                         "risk_engine_authority": "deterministic_veto_supreme",
                     }
                 }
-                if self.settings.v6_marl_observation_active
+                if self.settings.v6_marl_enabled
                 else {}
             ),
         }
@@ -164,7 +163,7 @@ class PaperDecisionCycle:
         experiment = self.repo.ensure_experiment(
             version=(
                 V6_PAPER_EXPERIMENT_VERSION
-                if self.settings.v6_marl_observation_active
+                if self.settings.v6_marl_enabled
                 else PAPER_EXPERIMENT_VERSION
             ),
             config=self.experiment_config(),
