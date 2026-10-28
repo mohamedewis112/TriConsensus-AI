@@ -25,7 +25,7 @@ def metric(ts, symbol="BTCUSDT", oi=1000, oi_value=100000, g=1.1, ta=1.2, tp=1.3
 
 
 def test_metrics_bucket_end_labels_into_15m_candle():
-    base = 1_700_000_000_000
+    base = 1_699_999_200_000
     rows = [
         metric(base + 5 * 60_000, oi=100),
         metric(base + 10 * 60_000, oi=110),
@@ -74,6 +74,8 @@ def test_cross_venue_frame_builds_features_and_coverage():
         metrics=metrics,
     )
     assert coverage["fully_matched_ratio"] == 1.0
+    assert pd.isna(frame.iloc[0]["sum_open_interest"])
+    assert frame.iloc[1]["sum_open_interest"] == 1015.0
     assert "oi_change_1h" in frame.columns
     assert "top_vs_global_positioning" in frame.columns
     assert "taker_long_short_log" in frame.columns
