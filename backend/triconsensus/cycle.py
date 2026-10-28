@@ -21,7 +21,7 @@ from .db import PersistenceFailure, SupabaseRepository
 from .execution import PaperExecutionEngine
 from .features import build_features
 from .levels import build_trade_levels
-from .llm import OpenRouterProvider
+from .llm import build_llm_provider
 from .market_data import BybitPublicClient, MarketDataFailure
 from .orchestrator import DecisionOrchestrator
 from .v51_forward import (
@@ -55,7 +55,7 @@ class PaperDecisionCycle:
         self.market = BybitPublicClient(settings)
         self.strategy_context = BinanceGlobalRatioClient()
         self.repo = SupabaseRepository(settings)
-        self.agents = AgentService(OpenRouterProvider(settings))
+        self.agents = AgentService(build_llm_provider(settings))
 
         self.v6_policy = None
         self.portfolio_adapter = None
