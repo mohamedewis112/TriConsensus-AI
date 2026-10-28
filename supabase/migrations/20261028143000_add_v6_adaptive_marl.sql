@@ -102,6 +102,13 @@ create table if not exists public.v6_volatility_snapshots (
 );
 alter table public.v6_volatility_snapshots enable row level security;
 
+create index if not exists marl_reward_memory_experiment_id_idx
+  on public.marl_reward_memory(experiment_id);
+create index if not exists marl_action_logs_market_snapshot_id_idx
+  on public.marl_action_logs(market_snapshot_id);
+create index if not exists marl_policy_update_runs_source_reward_id_idx
+  on public.marl_policy_update_runs(source_reward_id);
+
 create index if not exists marl_reward_memory_symbol_created_idx
   on public.marl_reward_memory(symbol, created_at desc);
 create index if not exists marl_action_logs_experiment_created_idx
