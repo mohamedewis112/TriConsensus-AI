@@ -31,7 +31,8 @@ jobs:
       - name: Install core and V6 MARL dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt -r backend/requirements-marl.txt "pytest>=8.3,<9" "pytest-asyncio>=0.25,<2"
+          pip install -r backend/requirements.txt "websockets>=15,<16" "pytest>=8.3,<9" "pytest-asyncio>=0.25,<2"
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<3"
 
       - name: Run V6 adaptive and MAPPO tests
         env:
