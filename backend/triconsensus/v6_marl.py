@@ -99,6 +99,45 @@ if TORCH_AVAILABLE:
         def _tensor(values: list[float] | np.ndarray) -> "torch.Tensor":
             return torch.as_tensor(values, dtype=torch.float32).reshape(1, -1)
 
+        @staticmethod
+        def _logit(value: float) -> float:
+            clipped = min(1.0 - 1e-5, max(1e-5, value))
+            return float(np.log(clipped / (1.0 - clipped)))
+
+        def initialize_safe_prior(self, *, policy_version: str = "v6-safe-prior-v0") -> None:
+            """Initialize a conservative non-random policy for shadow exploration."""
+            with torch.no_grad():
+                for module in (
+                    self.portfolio_actor,
+                    self.risk_actor,
+                    self.critic,
+                ):
+                    for parameter in module.parameters():
+                        parameter.zero_()
+
+                portfolio_targets = [0.95, 0.95, 0.05, 0.05]
+                risk_targets = [0.50, 1.0 / 3.0, 0.05, 0.05]
+                self.portfolio_actor.mean.bias.copy_(
+                    torch.tensor(
+                        [self._logit(v) for v in portfolio_targets],
+                        dtype=torch.float32,
+                    )
+                )
+                self.risk_actor.mean.bias.copy_(
+                    torch.tensor(
+                        [self._logit(v) for v in risk_targets],
+                        dtype=torch.float32,
+                    )
+                )
+                self.portfolio_actor.log_std.fill_(-2.5)
+                self.risk_actor.log_std.fill_(-2.5)
+
+            self.portfolio_actor.eval()
+            self.risk_actor.eval()
+            self.critic.eval()
+            self.ready = True
+            self.policy_version = policy_version
+
         def load_payload(self, payload: dict[str, Any], *, policy_version: str) -> None:
             required = {"portfolio_actor", "risk_actor", "critic"}
             if not required.issubset(payload):
@@ -292,6 +331,9 @@ else:
         def __init__(self, **_: Any) -> None:
             self.ready = False
             self.policy_version = "torch_unavailable"
+
+        def initialize_safe_prior(self, *_: Any, **__: Any) -> None:
+            raise MARLDependencyError("install backend/requirements-marl.txt")
 
         def load_payload(self, *_: Any, **__: Any) -> None:
             raise MARLDependencyError("install backend/requirements-marl.txt")
