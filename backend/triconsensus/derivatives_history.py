@@ -316,3 +316,66 @@ def build_derivatives_feature_frame(
     frame["basis_change_bps"] = frame["mark_index_basis_bps"].diff()
 
     return frame
+
+
+
+def derivatives_quality_report(
+    frame: pd.DataFrame,
+    *,
+    minimum_dense_coverage: float = 0.95,
+    minimum_funding_coverage: float = 0.90,
+    maximum_funding_age_ms: int = 12 * 60 * 60 * 1000,
+) -> dict:
+    if frame.empty:
+        raise ValueError("derivatives feature frame is empty")
+    if not 0 < minimum_dense_coverage <= 1:
+        raise ValueError("invalid dense coverage threshold")
+    if not 0 < minimum_funding_coverage <= 1:
+        raise ValueError("invalid funding coverage threshold")
+
+    required_dense = (
+        "mark_close",
+        "index_close",
+        "premium_index_close",
+        "open_interest",
+    )
+    coverage = {
+        column: float(frame[column].notna().mean())
+        for column in required_dense
+    }
+    funding_coverage = float(frame["funding_rate"].notna().mean())
+
+    if "funding_timestamp_ms" in frame.columns:
+        age = frame["start_ms"] - frame["funding_timestamp_ms"]
+        known = age[frame["funding_rate"].notna()]
+        max_age = int(known.max()) if not known.empty else None
+        stale_rows = int(
+            ((known < 0) | (known > maximum_funding_age_ms)).sum()
+        )
+    else:
+        max_age = None
+        stale_rows = int(frame["funding_rate"].notna().sum())
+
+    dense_passed = all(
+        value >= minimum_dense_coverage
+        for value in coverage.values()
+    )
+    funding_passed = (
+        funding_coverage >= minimum_funding_coverage
+        and stale_rows == 0
+    )
+    passed = dense_passed and funding_passed
+
+    return {
+        "passed": passed,
+        "default_action": "NO_TRADE" if not passed else "RESEARCH_ONLY",
+        "dense_coverage": coverage,
+        "funding_coverage": funding_coverage,
+        "maximum_observed_funding_age_ms": max_age,
+        "stale_funding_rows": stale_rows,
+        "thresholds": {
+            "minimum_dense_coverage": minimum_dense_coverage,
+            "minimum_funding_coverage": minimum_funding_coverage,
+            "maximum_funding_age_ms": maximum_funding_age_ms,
+        },
+    }
