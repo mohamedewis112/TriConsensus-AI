@@ -24,7 +24,7 @@ def _resolved_paper_version(version: str | None) -> str:
         return version
     return (
         V6_PAPER_EXPERIMENT_VERSION
-        if settings.v6_marl_enabled
+        if settings.v6_marl_observation_active
         else PAPER_EXPERIMENT_VERSION
     )
 
