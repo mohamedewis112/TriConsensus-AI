@@ -1,10 +1,7 @@
 name: V5.1 Cross Year 2023 Replication
 
 on:
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "research-trigger/v51-cross-year-2023.txt"
+  workflow_dispatch:
 
 permissions:
   contents: read
