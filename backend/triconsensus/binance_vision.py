@@ -82,7 +82,7 @@ class BinanceVisionMetricsClient:
         self,
         base_url: str = "https://data.binance.vision",
         *,
-        concurrency: int = 8,
+        concurrency: int = 4,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._semaphore = asyncio.Semaphore(concurrency)
@@ -107,23 +107,27 @@ class BinanceVisionMetricsClient:
     ) -> list[FuturesMetricRow]:
         url = self.daily_url(symbol, day)
         async with self._semaphore:
-            try:
-                async with httpx.AsyncClient(
-                    timeout=httpx.Timeout(30.0, connect=10.0),
-                    follow_redirects=True,
-                    headers={"User-Agent": "TriConsensus-AI/0.1 research"},
-                ) as client:
-                    response = await client.get(url)
-                    if response.status_code == 404:
-                        return []
-                    response.raise_for_status()
-                    payload = response.content
-            except httpx.HTTPError as exc:
-                raise BinanceVisionFailure(
-                    f"metrics download failed for {symbol} {day.isoformat()}: "
-                    f"{type(exc).__name__}"
-                ) from exc
-        return parse_metrics_zip(payload, symbol=symbol)
+            for attempt in range(3):
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(45.0, connect=15.0),
+                        follow_redirects=True,
+                        headers={"User-Agent": "TriConsensus-AI/0.1 research"},
+                    ) as client:
+                        response = await client.get(url)
+                        if response.status_code == 404:
+                            return []
+                        response.raise_for_status()
+                        payload = response.content
+                    return parse_metrics_zip(payload, symbol=symbol)
+                except httpx.HTTPError:
+                    if attempt < 2:
+                        await asyncio.sleep(0.75 * (2**attempt))
+                        continue
+                    # Treat a persistently unreachable day as missing data.
+                    # historical_metrics still fails closed when coverage <90%.
+                    return []
+        return []
 
     async def historical_metrics(
         self,
