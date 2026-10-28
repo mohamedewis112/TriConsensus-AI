@@ -49,12 +49,30 @@ class Settings(BaseSettings):
     max_realized_volatility_20: float = Field(default=0.08, gt=0, le=1)
     max_market_data_age_ms: int = Field(default=5000, ge=250)
 
+    # V6 adaptive MARL runs in shadow mode by default. It cannot increase the
+    # deterministic V5.1 risk ceiling and must fail closed when enforcement is on.
+    v6_marl_enabled: bool = False
+    v6_marl_shadow_mode: bool = True
+    v6_reward_window: int = Field(default=40, ge=20, le=40)
+    v6_min_warmup_trades_per_asset: int = Field(default=20, ge=20, le=40)
+    v6_drawdown_penalty: float = Field(default=2.0, ge=0.0, le=10.0)
+    v6_blacklist_probability: float = Field(default=0.80, ge=0.50, le=1.0)
+    v6_min_blacklist_samples: int = Field(default=8, ge=4, le=40)
+    v6_hard_losing_streak: int = Field(default=4, ge=2, le=20)
+    v6_hard_mean_net_return: float = Field(default=-0.003, ge=-0.05, le=0.0)
+    v6_max_microstructure_age_ms: int = Field(default=2000, ge=100, le=10000)
+    v6_adverse_orderbook_imbalance: float = Field(default=0.35, ge=0.05, le=0.95)
+
     @model_validator(mode="after")
     def prohibit_live_trading(self) -> "Settings":
         if str(self.trading_mode).lower() not in {"paper", "dry_run", "demo"}:
             raise ValueError("Live trading is disabled in TriConsensus AI V1")
         if self.paper_slippage_bps > self.max_slippage_bps:
             raise ValueError("paper slippage cannot exceed the risk-engine slippage ceiling")
+        if self.v6_min_warmup_trades_per_asset > self.v6_reward_window:
+            raise ValueError("V6 warmup cannot exceed the rolling reward window")
+        if self.v6_marl_enabled and not self.v6_marl_shadow_mode and self.trading_mode != TradingMode.PAPER:
+            raise ValueError("V6 enforcement is allowed only in paper mode")
         return self
 
 
