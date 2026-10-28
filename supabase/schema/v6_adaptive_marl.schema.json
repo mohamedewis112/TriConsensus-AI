@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "triconsensus://supabase/v6-adaptive-marl",
+  "title": "TriConsensus V6 Adaptive MARL Supabase Schema",
+  "type": "object",
+  "meta": {
+    "paper_only": true,
+    "live_trading": false,
+    "fail_closed": true,
+    "reward_memory": "append_only",
+    "training_path": "asynchronous_pgmq",
+    "deterministic_risk_engine_authority": "supreme_veto"
+  },
+  "tables": {
+    "marl_reward_memory": {
+      "primary_key": "id",
+      "unique": [
+        "checksum",
+        "trade_id"
+      ],
+      "rls": true,
+      "append_only": true,
+      "columns": {
+        "id": "uuid",
+        "experiment_id": "uuid|null",
+        "trade_id": "uuid",
+        "symbol": "enum(BTC/USDT,ETH/USDT)",
+        "policy_version": "text",
+        "state_json": "jsonb",
+        "action_json": "jsonb",
+        "net_return": "numeric",
+        "max_drawdown": "numeric[0,1]",
+        "reward": "numeric",
+        "terminal": "boolean",
+        "checksum": "text",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_action_logs": {
+      "primary_key": "id",
+      "unique": [
+        "signal_snapshot_id+agent_role"
+      ],
+      "rls": true,
+      "append_only": true,
+      "columns": {
+        "id": "uuid",
+        "experiment_id": "uuid|null",
+        "market_snapshot_id": "uuid|null",
+        "signal_snapshot_id": "uuid|null",
+        "agent_role": "enum(portfolio,dynamic_risk)",
+        "policy_version": "text",
+        "state_json": "jsonb",
+        "action_json": "jsonb",
+        "projected_action_json": "jsonb",
+        "shadow_mode": "boolean",
+        "vetoed_by_risk": "boolean",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_policy_versions": {
+      "primary_key": "id",
+      "unique": [
+        "agent_role+version"
+      ],
+      "rls": true,
+      "append_only": true,
+      "columns": {
+        "id": "uuid",
+        "agent_role": "enum(mappo_shared,portfolio,dynamic_risk)",
+        "version": "text",
+        "status": "enum(candidate,active,rejected)",
+        "weights": "jsonb",
+        "training_sample_count": "integer>=0",
+        "config_hash": "text",
+        "metrics": "jsonb",
+        "created_at": "timestamptz"
+      }
+    },
+    "marl_policy_update_runs": {
+      "primary_key": "id",
+      "rls": true,
+      "append_only": true,
+      "columns": {
+        "id": "uuid",
+        "agent_role": "text",
+        "source_queue_msg_id": "bigint|null",
+        "source_reward_id": "uuid|null",
+        "prior_policy_version": "text|null",
+        "candidate_policy_version": "text|null",
+        "sample_count": "integer>=0",
+        "status": "enum(started,trained,skipped,failed)",
+        "metrics": "jsonb",
+        "error_code": "text|null",
+        "created_at": "timestamptz"
+      }
+    },
+    "v6_microstructure_snapshots": {
+      "primary_key": "id",
+      "unique": [
+        "venue+symbol+exchange_timestamp_ms+sequence"
+      ],
+      "rls": true,
+      "columns": {
+        "id": "bigserial",
+        "symbol": "enum(BTC/USDT,ETH/USDT)",
+        "venue": "enum(bybit,binance)",
+        "captured_at": "timestamptz",
+        "exchange_timestamp_ms": "bigint",
+        "received_timestamp_ms": "bigint",
+        "sequence": "bigint|null",
+        "bid_depth": "numeric>=0",
+        "ask_depth": "numeric>=0",
+        "imbalance": "numeric[-1,1]",
+        "spread_bps": "numeric>=0",
+        "payload": "jsonb",
+        "checksum": "text",
+        "created_at": "timestamptz"
+      }
+    },
+    "v6_volatility_snapshots": {
+      "primary_key": "id",
+      "rls": true,
+      "columns": {
+        "id": "bigserial",
+        "symbol": "enum(BTC/USDT,ETH/USDT)",
+        "source": "text",
+        "captured_at": "timestamptz",
+        "mark_iv": "numeric>=0",
+        "expiry": "timestamptz|null",
+        "sample_count": "integer>=0",
+        "payload": "jsonb",
+        "created_at": "timestamptz"
+      }
+    }
+  },
+  "queue": {
+    "extension": "pgmq",
+    "name": "triconsensus_marl_rewards",
+    "enqueue_trigger": "private.enqueue_marl_reward",
+    "dequeue_rpc": "public.v6_dequeue_marl_rewards",
+    "archive_rpc": "public.v6_archive_marl_reward",
+    "rpc_access": "service_role_only",
+    "decision_path_blocking": false
+  },
+  "policy": {
+    "architecture": "constrained_MAPPO_with_centralized_critic",
+    "portfolio_state_dim": 15,
+    "risk_state_dim": 8,
+    "global_state_dim": 23,
+    "action_dimensions": {
+      "portfolio": 4,
+      "dynamic_risk": 4
+    },
+    "warmup": {
+      "reward_window": 40,
+      "minimum_trades_per_asset": 20,
+      "safe_prior_before_ppo": true
+    },
+    "reward": "net_return - drawdown_penalty * max_drawdown",
+    "risk_constraints": {
+      "asset_weight_range": [
+        0,
+        1
+      ],
+      "stop_atr_multiplier_range": [
+        0.75,
+        2.25
+      ],
+      "reward_to_risk_multiplier_range": [
+        0.75,
+        1.5
+      ],
+      "trailing_lock_fraction_range": [
+        0,
+        0.9
+      ],
+      "rl_cannot_increase_base_risk_budget": true,
+      "deterministic_risk_engine_final_veto": true
+    }
+  }
+}
