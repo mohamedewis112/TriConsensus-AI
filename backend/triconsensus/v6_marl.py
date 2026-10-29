@@ -104,8 +104,23 @@ if TORCH_AVAILABLE:
             clipped = min(1.0 - 1e-5, max(1e-5, value))
             return float(np.log(clipped / (1.0 - clipped)))
 
-        def initialize_safe_prior(self, *, policy_version: str = "v6-safe-prior-v0") -> None:
-            """Initialize a conservative non-random policy for shadow exploration."""
+        def initialize_safe_prior(
+            self,
+            *,
+            policy_version: str = "v6-safe-prior-v0",
+            portfolio_weight_caps: dict[str, float] | None = None,
+        ) -> None:
+            """Initialize a conservative non-random policy for shadow exploration.
+
+            Optional learned per-asset caps may only reduce the default 0.95
+            portfolio weights. They never increase the base risk envelope.
+            """
+            caps = portfolio_weight_caps or {}
+            btc_cap = min(0.95, max(0.0, float(caps.get("BTC/USDT", 0.95))))
+            eth_cap = min(0.95, max(0.0, float(caps.get("ETH/USDT", 0.95))))
+            btc_blacklist = 0.95 if btc_cap <= 0 else 0.05
+            eth_blacklist = 0.95 if eth_cap <= 0 else 0.05
+
             with torch.no_grad():
                 for module in (
                     self.portfolio_actor,
@@ -115,7 +130,12 @@ if TORCH_AVAILABLE:
                     for parameter in module.parameters():
                         parameter.zero_()
 
-                portfolio_targets = [0.95, 0.95, 0.05, 0.05]
+                portfolio_targets = [
+                    max(1e-5, btc_cap),
+                    max(1e-5, eth_cap),
+                    btc_blacklist,
+                    eth_blacklist,
+                ]
                 risk_targets = [0.50, 1.0 / 3.0, 0.05, 0.05]
                 self.portfolio_actor.mean.bias.copy_(
                     torch.tensor(
