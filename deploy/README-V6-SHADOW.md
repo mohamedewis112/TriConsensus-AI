@@ -91,3 +91,47 @@ The observer is authenticated with a separate random token stored in Supabase Va
 ## Vercel research runtime region
 
 The isolated `triconsensus-runtime-preview` FastAPI project uses the `cdg1` function region for the read-only research runtime. This avoids the Binance Futures geo restriction observed from `iad1` while preserving the frozen V5.1 protocol. Region selection is an infrastructure setting only; it must not change thresholds, lag, horizon, cost, or signal semantics.
+
+
+## Parallel V6 shadow learning
+
+V5.1 remains the frozen scientific baseline. V6 now learns in parallel without
+changing V5.1 decisions or the deterministic risk envelope.
+
+Activation rules:
+
+- Learning starts from the immutable activation timestamp stored in
+  `v6_shadow_learning_control`.
+- Historical V5.1 forward outcomes from before activation are forbidden as
+  training rewards.
+- Only new V5.1 `LONG`/`SHORT` signals with V6 shadow action logs can enter
+  the replay dataset.
+- BTC and ETH use isolated replay partitions and isolated learned safe-prior
+  versions.
+- A transition is evaluated only after its frozen 180-minute horizon has fully
+  elapsed plus the candle-ingestion guard.
+- Counterfactual outcomes are stored in
+  `v6_shadow_learning_outcomes`, never in `marl_reward_memory`.
+- `marl_reward_memory` remains reserved for actual closed paper trades.
+
+Warm-up and learning:
+
+- Minimum warm-up is 20 evaluated transitions per asset.
+- Before warm-up, the existing neutral/symbolic shadow actions remain active.
+- At 20+ transitions, a beta-smoothed half-Kelly safe prior is produced per
+  asset. It can only cap/reduce the portfolio weight in shadow mode.
+- The learned safe prior never raises a weight above the existing base risk
+  envelope and may reduce it to zero.
+- The risk actor is not trained from fixed-horizon counterfactual outcomes;
+  risk learning requires real closed paper-trade rewards.
+- MAPPO safe-prior initialization accepts the learned BTC/ETH caps so later PPO
+  training starts from the learned conservative prior rather than a fixed
+  95%/95% allocation.
+
+Schedules:
+
+- Shadow transition capture: `:04/:19/:34/:49`
+- Horizon-safe evaluator: `:05/:20/:35/:50`
+- Per-asset safe-prior updater: `:06/:21/:36/:51`
+
+This layer has no trading authority and V6 enforcement remains disabled.
