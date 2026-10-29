@@ -151,7 +151,10 @@ function buildPortfolioState(rows: any[]) {
   };
 }
 
-function portfolioAction(state: any) {
+function portfolioAction(
+  state: any,
+  learnedPolicies: Record<SymbolName, any | null>,
+) {
   const blocked: SymbolName[] = [];
   for (const symbol of ["BTC/USDT", "ETH/USDT"] as SymbolName[]) {
     const stats = state.assets[symbol];
@@ -167,18 +170,37 @@ function portfolioAction(state: any) {
     "ETH/USDT": blocked.includes("ETH/USDT") ? 0 : 1,
   };
 
+  const appliedVersions: Record<SymbolName, string | null> = {
+    "BTC/USDT": null,
+    "ETH/USDT": null,
+  };
+  for (const symbol of ["BTC/USDT", "ETH/USDT"] as SymbolName[]) {
+    const learned = learnedPolicies[symbol];
+    if (!learned) continue;
+    const cap = Math.max(0, Math.min(1, n(learned.max_weight)));
+    weights[symbol] = Math.min(weights[symbol], cap);
+    appliedVersions[symbol] = String(learned.version);
+    if (cap === 0 && !blocked.includes(symbol)) blocked.push(symbol);
+  }
+
+  const hasLearnedPrior = Object.values(appliedVersions).some(Boolean);
   return {
     asset_weights: weights,
     blacklisted_assets: blocked,
-    policy_version: state.warmup_complete
+    policy_version: hasLearnedPrior
+      ? "v6-shadow-parallel-safe-prior"
+      : state.warmup_complete
       ? "v6-shadow-untrained"
       : "v6-warmup",
-    reason: state.warmup_complete
+    reason: hasLearnedPrior
+      ? "per_asset_learned_safe_prior_cap_shadow_only"
+      : state.warmup_complete
       ? "mappo_policy_not_ready_shadow_only"
       : "warmup_insufficient_reward_memory",
     shadow_mode: true,
     policy_log_prob: null,
     policy_action: null,
+    shadow_asset_policy_versions: appliedVersions,
   };
 }
 
@@ -240,7 +262,11 @@ function dynamicRiskAction(state: any) {
   };
 }
 
-async function observeSymbol(symbol: SymbolName, portfolioState: any) {
+async function observeSymbol(
+  symbol: SymbolName,
+  portfolioState: any,
+  learnedPolicies: Record<SymbolName, any | null>,
+) {
   const { data: signals, error: signalError } = await supabase
     .from("strategy_signal_snapshots")
     .select("id,experiment_id,market_snapshot_id,strategy_version,symbol,observed_at,context_timestamp,signal,payload")
@@ -312,7 +338,7 @@ async function observeSymbol(symbol: SymbolName, portfolioState: any) {
     microstructure_age_ms: microAge,
   };
 
-  const pAction = portfolioAction(portfolioState);
+  const pAction = portfolioAction(portfolioState, learnedPolicies);
   const rAction = dynamicRiskAction(volatilityState);
   const stateJson = {
     portfolio_state: portfolioState,
@@ -421,9 +447,35 @@ Deno.serve(async (req: Request) => {
   }
   const portfolioState = buildPortfolioState([...(rewards || [])].reverse());
 
+  const { data: policyRows, error: shadowPolicyError } = await supabase
+    .from("v6_shadow_asset_policy_versions")
+    .select("symbol,version,sample_count,max_weight,created_at")
+    .order("sample_count", { ascending: false })
+    .limit(20);
+  if (shadowPolicyError) {
+    return Response.json(
+      { ok: false, error: "shadow_policy_read_failed" },
+      { status: 503 },
+    );
+  }
+
+  const learnedPolicies: Record<SymbolName, any | null> = {
+    "BTC/USDT": null,
+    "ETH/USDT": null,
+  };
+  for (const row of policyRows || []) {
+    const symbol = row.symbol as SymbolName;
+    if (
+      (symbol === "BTC/USDT" || symbol === "ETH/USDT") &&
+      learnedPolicies[symbol] == null
+    ) {
+      learnedPolicies[symbol] = row;
+    }
+  }
+
   const results = await Promise.allSettled([
-    observeSymbol("BTC/USDT", portfolioState),
-    observeSymbol("ETH/USDT", portfolioState),
+    observeSymbol("BTC/USDT", portfolioState, learnedPolicies),
+    observeSymbol("ETH/USDT", portfolioState, learnedPolicies),
   ]);
 
   const normalized = results.map((result, index) =>
