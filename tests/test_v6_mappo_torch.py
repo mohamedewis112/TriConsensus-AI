@@ -103,3 +103,26 @@ def test_mappo_clipped_update_produces_finite_metrics():
         "entropy",
     }
     assert all(math.isfinite(value) for value in metrics.values())
+
+
+def test_safe_prior_can_start_from_learned_per_asset_caps_without_increasing_risk():
+    bundle = MAPPOPolicyBundle(
+        portfolio_input_dim=15,
+        risk_input_dim=8,
+        global_state_dim=23,
+    )
+    bundle.initialize_safe_prior(
+        policy_version="parallel-safe-prior",
+        portfolio_weight_caps={
+            "BTC/USDT": 0.70,
+            "ETH/USDT": 0.0,
+        },
+    )
+
+    portfolio = bundle.portfolio_action([0.0] * 15)
+    assert portfolio[0] == pytest.approx(0.70, abs=1e-4)
+    assert portfolio[1] <= 1e-4
+    assert portfolio[2] == pytest.approx(0.05, abs=1e-4)
+    assert portfolio[3] == pytest.approx(0.95, abs=1e-4)
+    assert portfolio[0] <= 0.95
+    assert portfolio[1] <= 0.95
