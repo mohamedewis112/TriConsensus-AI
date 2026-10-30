@@ -151,9 +151,28 @@ function buildPortfolioState(rows: any[]) {
   };
 }
 
+function regimeKey(
+  trend: string,
+  realizedVolatility: number,
+  impliedVolatility: number | null,
+): string {
+  let vol = "unknown_iv";
+  if (
+    impliedVolatility != null &&
+    Number.isFinite(impliedVolatility) &&
+    realizedVolatility > 0
+  ) {
+    const ratio = impliedVolatility / realizedVolatility;
+    vol = ratio >= 1.25 ? "high_iv" : ratio <= 0.80 ? "low_iv" : "normal_iv";
+  }
+  return `${trend}|${vol}`;
+}
+
 function portfolioAction(
   state: any,
-  learnedPolicies: Record<SymbolName, any | null>,
+  symbol: SymbolName,
+  currentRegime: string,
+  adaptivePolicy: any | null,
 ) {
   const blocked: SymbolName[] = [];
   for (const symbol of ["BTC/USDT", "ETH/USDT"] as SymbolName[]) {
@@ -170,40 +189,50 @@ function portfolioAction(
     "ETH/USDT": blocked.includes("ETH/USDT") ? 0 : 1,
   };
 
-  const appliedVersions: Record<SymbolName, string | null> = {
-    "BTC/USDT": null,
-    "ETH/USDT": null,
-  };
-  for (const symbol of ["BTC/USDT", "ETH/USDT"] as SymbolName[]) {
-    const learned = learnedPolicies[symbol];
-    if (!learned) continue;
-    const cap = Math.max(0, Math.min(1, n(learned.max_weight)));
-    weights[symbol] = Math.min(weights[symbol], cap);
-    appliedVersions[symbol] = String(learned.version);
-    if (cap === 0 && !blocked.includes(symbol)) blocked.push(symbol);
+  let adaptiveVersion: string | null = null;
+  let appliedWeight = weights[symbol];
+  let targetWeight = weights[symbol];
+  let evidenceCount = 0;
+  let evidenceSource = "none";
+  let opportunityCostBoost = false;
+  let lossGuard = false;
+
+  if (adaptivePolicy) {
+    const cap = Math.max(0, Math.min(1, n(adaptivePolicy.applied_weight)));
+    targetWeight = Math.max(0, Math.min(1, n(adaptivePolicy.target_weight)));
+    appliedWeight = Math.min(weights[symbol], cap);
+    weights[symbol] = appliedWeight;
+    adaptiveVersion = String(adaptivePolicy.version);
+    evidenceCount = Number(adaptivePolicy.evidence_count || 0);
+    evidenceSource = String(adaptivePolicy.evidence_source || "unknown");
+    opportunityCostBoost = Boolean(adaptivePolicy.opportunity_cost_boost);
+    lossGuard = Boolean(adaptivePolicy.loss_guard);
+    if (appliedWeight === 0 && !blocked.includes(symbol)) blocked.push(symbol);
   }
 
-  const hasLearnedPrior = Object.values(appliedVersions).some(Boolean);
   return {
     asset_weights: weights,
     blacklisted_assets: blocked,
-    policy_version: hasLearnedPrior
-      ? "v6-shadow-parallel-safe-prior"
-      : state.warmup_complete
-      ? "v6-shadow-untrained"
-      : "v6-warmup",
-    reason: hasLearnedPrior
-      ? "per_asset_learned_safe_prior_cap_shadow_only"
-      : state.warmup_complete
-      ? "mappo_policy_not_ready_shadow_only"
-      : "warmup_insufficient_reward_memory",
+    policy_version: "v6-shadow-adaptive-v2",
+    reason: adaptivePolicy
+      ? "rolling_regime_aware_gradual_weight_shadow_only"
+      : "adaptive_v2_policy_missing_fail_safe",
     shadow_mode: true,
     policy_log_prob: null,
     policy_action: null,
-    shadow_asset_policy_versions: appliedVersions,
+    adaptive_policy_version: adaptiveVersion,
+    regime_key: currentRegime,
+    target_weight: targetWeight,
+    applied_weight: appliedWeight,
+    evidence_count: evidenceCount,
+    evidence_source: evidenceSource,
+    opportunity_cost_boost: opportunityCostBoost,
+    loss_guard: lossGuard,
+    maximum_relative_risk: 1,
+    v51_protocol_changed: false,
+    trading_authority: false,
   };
 }
-
 function dynamicRiskAction(state: any) {
   let stop = 1.5;
   let rr = 1.0;
@@ -265,7 +294,7 @@ function dynamicRiskAction(state: any) {
 async function observeSymbol(
   symbol: SymbolName,
   portfolioState: any,
-  learnedPolicies: Record<SymbolName, any | null>,
+  adaptivePolicies: Record<string, any>,
 ) {
   const { data: signals, error: signalError } = await supabase
     .from("strategy_signal_snapshots")
@@ -338,14 +367,28 @@ async function observeSymbol(
     microstructure_age_ms: microAge,
   };
 
-  const pAction = portfolioAction(portfolioState, learnedPolicies);
+  const currentRegime = regimeKey(
+    features.trend,
+    features.realizedAnnualized,
+    iv ? n(iv.mark_iv) : null,
+  );
+  const adaptivePolicy =
+    adaptivePolicies[`${symbol}|${currentRegime}`] ||
+    adaptivePolicies[`${symbol}|all`] ||
+    null;
+  const pAction = portfolioAction(
+    portfolioState,
+    symbol,
+    currentRegime,
+    adaptivePolicy,
+  );
   const rAction = dynamicRiskAction(volatilityState);
   const stateJson = {
     portfolio_state: portfolioState,
     volatility_state: volatilityState,
     iv_snapshot: iv,
     observer: {
-      kind: "supabase_edge_shadow_observer_v1",
+      kind: "supabase_edge_shadow_observer_v2",
       trading_authority: false,
       v51_protocol_mutation: false,
       llm_invoked: false,
@@ -406,6 +449,9 @@ async function observeSymbol(
     dynamic_policy: rAction.policy_version,
     dynamic_force_no_trade_shadow: rAction.force_no_trade,
     microstructure_age_ms: microAge,
+    regime_key: currentRegime,
+    adaptive_policy_version: pAction.adaptive_policy_version,
+    adaptive_applied_weight: pAction.applied_weight,
   };
 }
 
@@ -448,34 +494,29 @@ Deno.serve(async (req: Request) => {
   const portfolioState = buildPortfolioState([...(rewards || [])].reverse());
 
   const { data: policyRows, error: shadowPolicyError } = await supabase
-    .from("v6_shadow_asset_policy_versions")
-    .select("symbol,version,sample_count,max_weight,created_at")
+    .from("v6_shadow_regime_policy_versions")
+    .select(
+      "symbol,regime_key,version,sample_count,evidence_count,evidence_source,target_weight,applied_weight,opportunity_cost_boost,loss_guard,created_at",
+    )
     .order("sample_count", { ascending: false })
-    .limit(20);
+    .order("created_at", { ascending: false })
+    .limit(100);
   if (shadowPolicyError) {
     return Response.json(
-      { ok: false, error: "shadow_policy_read_failed" },
+      { ok: false, error: "adaptive_v2_policy_read_failed" },
       { status: 503 },
     );
   }
 
-  const learnedPolicies: Record<SymbolName, any | null> = {
-    "BTC/USDT": null,
-    "ETH/USDT": null,
-  };
+  const adaptivePolicies: Record<string, any> = {};
   for (const row of policyRows || []) {
-    const symbol = row.symbol as SymbolName;
-    if (
-      (symbol === "BTC/USDT" || symbol === "ETH/USDT") &&
-      learnedPolicies[symbol] == null
-    ) {
-      learnedPolicies[symbol] = row;
-    }
+    const key = `${row.symbol}|${row.regime_key}`;
+    if (adaptivePolicies[key] == null) adaptivePolicies[key] = row;
   }
 
   const results = await Promise.allSettled([
-    observeSymbol("BTC/USDT", portfolioState, learnedPolicies),
-    observeSymbol("ETH/USDT", portfolioState, learnedPolicies),
+    observeSymbol("BTC/USDT", portfolioState, adaptivePolicies),
+    observeSymbol("ETH/USDT", portfolioState, adaptivePolicies),
   ]);
 
   const normalized = results.map((result, index) =>
@@ -490,7 +531,7 @@ Deno.serve(async (req: Request) => {
 
   return Response.json({
     ok: normalized.every((x) => x.status !== "FAILED"),
-    mode: "V6_SHADOW_ACTION_OBSERVER",
+    mode: "V6_SHADOW_ACTION_OBSERVER_ADAPTIVE_V2",
     trading_authority: false,
     v51_protocol_changed: false,
     llm_invoked: false,
