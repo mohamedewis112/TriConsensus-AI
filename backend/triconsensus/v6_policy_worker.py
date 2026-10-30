@@ -222,7 +222,11 @@ class V6PolicyUpdateWorker:
 
         if active is None:
             candidate_version = _version("v6-safe-prior")
-            bundle.initialize_safe_prior(policy_version=candidate_version)
+            adaptive_caps = self.repo.latest_v6_adaptive_safe_prior_caps()
+            bundle.initialize_safe_prior(
+                policy_version=candidate_version,
+                portfolio_weight_caps=adaptive_caps,
+            )
             self.repo.insert(
                 "marl_policy_versions",
                 {
@@ -233,7 +237,10 @@ class V6PolicyUpdateWorker:
                     "training_sample_count": len(records),
                     "config_hash": config_hash,
                     "metrics": {
-                        "bootstrap": "conservative_non_random_prior",
+                        "bootstrap": "adaptive_v2_conservative_prior",
+                        "adaptive_seed_caps": adaptive_caps,
+                        "counterfactual_rewards_used": false,
+                        "risk_actor_counterfactual_training": false,
                         "warmup_state": warmup.model_dump(mode="json"),
                     },
                 },
@@ -245,7 +252,7 @@ class V6PolicyUpdateWorker:
                 prior_policy_version=None,
                 candidate_policy_version=candidate_version,
                 sample_count=len(records),
-                metrics={"bootstrap": True},
+                metrics={"bootstrap": True, "adaptive_seed_caps": adaptive_caps},
             )
             self._archive(messages)
             return {
