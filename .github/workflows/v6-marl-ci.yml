@@ -13,6 +13,7 @@ on:
       - "supabase/functions/v6-shadow-observer/**"
       - "supabase/migrations/*v6_shadow_observer.sql"
       - "supabase/migrations/*v6_parallel_shadow_learning.sql"
+      - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
   pull_request:
@@ -26,6 +27,7 @@ on:
       - "supabase/functions/v6-shadow-observer/**"
       - "supabase/migrations/*v6_shadow_observer.sql"
       - "supabase/migrations/*v6_parallel_shadow_learning.sql"
+      - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
 
