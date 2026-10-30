@@ -135,3 +135,47 @@ Schedules:
 - Per-asset safe-prior updater: `:06/:21/:36/:51`
 
 This layer has no trading authority and V6 enforcement remains disabled.
+
+
+## Adaptive V2 rolling/regime safe prior
+
+Adaptive V2 is a shadow-only successor to the cumulative half-Kelly cap. V5.1
+remains frozen and the deterministic risk engine retains final authority.
+
+The V2 activation boundary is stored in `v6_shadow_adaptive_control`. Data
+before activation may seed the policy as bootstrap training data, but V2
+validation metrics include only actions created after activation. No look-ahead
+or historical rewrite is allowed.
+
+Policy behavior:
+
+- BTC and ETH remain isolated.
+- The symbol rolling window is 30 evaluated outcomes.
+- Regime policies use trend plus the IV/realized-volatility bucket.
+- A regime needs at least 8 evaluated outcomes; otherwise the policy falls back
+  to the last 20 symbol outcomes.
+- Allowed relative exposure is discrete: `0, 0.25, 0.50, 0.75, 1.00`.
+- V2 can never exceed the V5 base risk envelope.
+- Hysteresis limits each policy update to one 0.25 step.
+- Three consecutive losses can tighten the target to at most 0.25.
+- Opportunity-cost recovery raises the target when recent completed outcomes
+  show 3/4 or 4/6 profitable observations with positive cumulative net return.
+- Counterfactual outcomes never train the risk actor and never enter
+  `marl_reward_memory`.
+
+The observer reads `v6_shadow_regime_policy_versions` and records
+`policy_version=v6-shadow-adaptive-v2` in new shadow actions. The old V1
+policy tables are retained only for audit/comparison.
+
+V2 scorecards are append-only and track baseline/shadow profit factor, maximum
+drawdown, losses avoided, winners missed, average exposure and exposure
+efficiency. Scorecards begin only after the V2 activation boundary.
+
+Schedules:
+
+- Adaptive policy update: `:07/:22/:37/:52`
+- Adaptive validation scorecard: `:08/:23/:38/:53`
+
+Future MAPPO bootstrap reads the latest symbol-level V2 caps only after genuine
+closed paper-trade reward memory completes warm-up. The risk actor is still
+trained only from genuine closed paper-trade rewards.
