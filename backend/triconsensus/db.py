@@ -232,6 +232,34 @@ class SupabaseRepository:
             return bool(result[0]) if result else False
         return bool(result)
 
+    def latest_v6_adaptive_safe_prior_caps(self) -> dict[str, float]:
+        """Latest symbol-level adaptive V2 caps used only to seed future MAPPO.
+
+        These caps are shadow-learned and can only reduce the conservative
+        portfolio prior. Counterfactual rows never enter marl_reward_memory.
+        """
+        caps: dict[str, float] = {}
+        for symbol in ("BTC/USDT", "ETH/USDT"):
+            try:
+                rows = (
+                    self.client.table("v6_shadow_regime_policy_versions")
+                    .select("symbol,applied_weight,sample_count,version")
+                    .eq("symbol", symbol)
+                    .eq("regime_key", "all")
+                    .order("sample_count", desc=True)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                    .data
+                )
+            except Exception as exc:
+                raise PersistenceFailure(
+                    f"adaptive V2 safe-prior read failed: {exc}"
+                ) from exc
+            if rows:
+                caps[symbol] = max(0.0, min(1.0, float(rows[0]["applied_weight"])))
+        return caps
+
     def latest_marl_policy(self, agent_role: str) -> dict | None:
         try:
             rows = (
