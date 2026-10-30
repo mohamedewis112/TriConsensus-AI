@@ -239,8 +239,8 @@ class V6PolicyUpdateWorker:
                     "metrics": {
                         "bootstrap": "adaptive_v2_conservative_prior",
                         "adaptive_seed_caps": adaptive_caps,
-                        "counterfactual_rewards_used": false,
-                        "risk_actor_counterfactual_training": false,
+                        "counterfactual_rewards_used": False,
+                        "risk_actor_counterfactual_training": False,
                         "warmup_state": warmup.model_dump(mode="json"),
                     },
                 },
