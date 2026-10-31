@@ -67,8 +67,10 @@ def test_shadow_observer_reads_regime_aware_adaptive_v2_without_trading_authorit
 def test_adaptive_v2_is_rolling_regime_aware_and_gradual():
     source = ADAPTIVE_MIGRATION.read_text()
     assert "'rolling_regime_aware_safe_prior_v2'" in source
-    assert "rolling_window,30" in source
-    assert "minimum_regime_samples',8" in source
+    assert "'adaptive-v2',now(),now(),30,20,8,0.25,true" in source
+    assert "limit 30" in source
+    assert "limit 20" in source
+    assert "'minimum_regime_samples',8" in source
     assert "target_weight in (0,0.25,0.5,0.75,1)" in source
     assert "v_prev+0.25" in source
     assert "v_prev-0.25" in source
