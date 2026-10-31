@@ -1,0 +1,79 @@
+{
+  "experiment": "V5.1-CROSS-YEAR-REPLICATION-2026-10-28",
+  "status": "passed_research_gate_eligible_for_forward_paper_test",
+  "default_action": "NO_TRADE",
+  "paper_only": true,
+  "feature": "global_long_short_change_1h",
+  "relationship": "negative",
+  "rule": "bottom rolling calibration decile => LONG; top rolling calibration decile => SHORT",
+  "horizon_minutes": 180,
+  "context_execution_lag_minutes": 15,
+  "round_trip_cost": 0.0015,
+  "procedure_frozen_before_test": true,
+  "cross_year_2023": {
+    "calibration": {
+      "days": 180,
+      "end_date": "2023-08-31"
+    },
+    "untouched_test": {
+      "days": 60,
+      "end_date": "2023-11-30"
+    },
+    "BTCUSDT": {
+      "qualified": true,
+      "thresholds": {
+        "low": -0.024305937218629947,
+        "high": 0.02443332351569144
+      },
+      "trades": 202,
+      "hit_rate": 0.7277227722772277,
+      "mean_net_return": 0.0032152532510985646,
+      "profit_factor": 2.952463179296648,
+      "profitable_folds": 4,
+      "folds": 4,
+      "bootstrap_lcb_95": 0.0021364216948889037,
+      "max_drawdown_full_notional": 0.07107647123704709
+    },
+    "ETHUSDT": {
+      "qualified": true,
+      "thresholds": {
+        "low": -0.020147658669889656,
+        "high": 0.01982388598966922
+      },
+      "trades": 235,
+      "hit_rate": 0.7106382978723405,
+      "mean_net_return": 0.0038284758041322426,
+      "profit_factor": 3.4904800002429304,
+      "profitable_folds": 4,
+      "folds": 4,
+      "bootstrap_lcb_95": 0.002911000859587838,
+      "max_drawdown_full_notional": 0.07032111650246953
+    }
+  },
+  "prior_2024_untouched_gate": {
+    "BTCUSDT": {
+      "qualified": true,
+      "trades": 222,
+      "hit_rate": 0.7657657657657657,
+      "mean_net_return": 0.005098578218129228,
+      "profit_factor": 3.790110919208404,
+      "bootstrap_lcb_95": 0.003920675650165928
+    },
+    "ETHUSDT": {
+      "qualified": true,
+      "trades": 280,
+      "hit_rate": 0.7142857142857143,
+      "mean_net_return": 0.004356067201753146,
+      "profit_factor": 2.67861421794605,
+      "bootstrap_lcb_95": 0.003027041549873157
+    }
+  },
+  "total_untouched_trades_across_2023_2024": 939,
+  "conclusion": "The frozen global-long-short-change rule passed untouched directional rule gates for BTCUSDT and ETHUSDT in both 2023 and 2024. It is now eligible for forward paper testing only; it is not approved for real-money execution.",
+  "source_runs": {
+    "v51_2024_run_id": 40614744153,
+    "v51_2023_run_id": 40614938406,
+    "btc_2023_job_id": 122575101226,
+    "eth_2023_job_id": 122575101011
+  }
+}

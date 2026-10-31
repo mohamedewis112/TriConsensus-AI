@@ -1,0 +1,72 @@
+name: V6 MARL CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/**"]
+    paths:
+      - "backend/triconsensus/v6_*.py"
+      - "backend/requirements-marl.txt"
+      - "backend/requirements-v6-collector.txt"
+      - "deploy/v6-shadow-collector.Dockerfile"
+      - ".railway/railway.ts"
+      - "supabase/functions/v6-shadow-observer/**"
+      - "supabase/migrations/*v6_shadow_observer.sql"
+      - "supabase/migrations/*v6_parallel_shadow_learning.sql"
+      - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
+      - "tests/test_v6_*.py"
+      - ".github/workflows/v6-marl-ci.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "backend/triconsensus/v6_*.py"
+      - "backend/requirements-marl.txt"
+      - "backend/requirements-v6-collector.txt"
+      - "deploy/v6-shadow-collector.Dockerfile"
+      - ".railway/railway.ts"
+      - "supabase/functions/v6-shadow-observer/**"
+      - "supabase/migrations/*v6_shadow_observer.sql"
+      - "supabase/migrations/*v6_parallel_shadow_learning.sql"
+      - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
+      - "tests/test_v6_*.py"
+      - ".github/workflows/v6-marl-ci.yml"
+
+jobs:
+  mappo-cpu-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install core and V6 MARL dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "websockets>=15,<16" "pytest>=8.3,<9" "pytest-asyncio>=0.25,<2"
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.9,<3"
+
+      - name: Run V6 adaptive and MAPPO tests
+        env:
+          PYTHONPATH: backend
+        run: |
+          pytest -q tests/test_v6_*.py
+
+      - name: Verify Supabase shadow observer safety contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("supabase/functions/v6-shadow-observer/index.ts").read_text()
+          assert 'trading_authority: false' in source
+          assert 'v51_protocol_changed: false' in source
+          assert 'llm_invoked: false' in source
+          assert '.from("paper_trades")' not in source
+          assert '.from("marl_reward_memory").insert' not in source
+          assert '.from("marl_action_logs")' in source
+          PY
+
+      - name: Build lightweight V6 shadow collector image
+        run: |
+          docker build -f deploy/v6-shadow-collector.Dockerfile -t triconsensus-v6-shadow-collector:test .

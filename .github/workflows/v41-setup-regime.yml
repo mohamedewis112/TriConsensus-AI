@@ -1,0 +1,43 @@
+name: V4.1 Setup Regime Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - symbol: BTCUSDT
+            days: 300
+            end_date: "2024-11-30"
+            window: "btc-2024-300d"
+          - symbol: ETHUSDT
+            days: 244
+            end_date: "2024-11-30"
+            window: "eth-2024-clean-244d"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install V4.1 research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install             "httpx>=0.28,<1"             "pydantic>=2.10,<3"             "pydantic-settings>=2.7,<3"             "numpy>=2.1,<3"             "pandas>=2.2,<4"
+      - name: Run setup x regime discovery
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.setup_regime_research             --symbol "${{ matrix.symbol }}"             --days "${{ matrix.days }}"             --end-date "${{ matrix.end_date }}"             --output-dir "v41/${{ matrix.window }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "triconsensus-v41-${{ matrix.window }}-${{ github.run_id }}"
+          path: "v41/${{ matrix.window }}"
+          if-no-files-found: error
+          retention-days: 30

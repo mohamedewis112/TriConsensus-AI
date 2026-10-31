@@ -1,0 +1,71 @@
+{
+  "experiment": "V5.1-FORWARD-EVIDENCE-RECORDER-2026-10-28T1042Z",
+  "paper_only": true,
+  "live_trading": false,
+  "forward_window": {
+    "start": "2026-10-27",
+    "end": "2026-12-25",
+    "calibration_expires_at": "2026-12-26T00:00:00Z"
+  },
+  "experiment_lock": {
+    "version": "V5.1-PAPER",
+    "execution_mode": "paper",
+    "runtime_config_hash": "b76546273434b348543fb4cd92d86ac0842e8b48c374fcaa83f37c8e08cfc2d0",
+    "calibration_protocol_hash": "84c9370ad5c25383cef7b7c00be15b24d0c5f6f636742e925a78779b47a017ef"
+  },
+  "recorder": {
+    "function": "private.capture_v51_forward_signals()",
+    "cron_job_id": 5,
+    "cron_job_name": "triconsensus_v51_forward_signal_capture",
+    "schedule_utc": "11,26,41,56 * * * *",
+    "collector_schedule_utc": "7,22,37,52 * * * *",
+    "source": "market_binance_global_ratio_5m",
+    "aggregation": "three exact 5m period-end points -> complete 15m bucket",
+    "context_lag_minutes": 15,
+    "max_context_age_minutes": 45,
+    "one_hour_contiguity_required": true,
+    "duplicate_policy": "one pg_cron_v1 recorder snapshot per symbol/calibration/context timestamp",
+    "outside_forward_window_action": "return_without_insert",
+    "default_action": "NO_TRADE"
+  },
+  "first_recorded_snapshots": [
+    {
+      "id": "3d436afd-1b5c-419e-a174-c3fc65a84672",
+      "symbol": "BTC/USDT",
+      "observed_at": "2026-10-28T10:41:53.036605Z",
+      "context_timestamp": "2026-10-28T10:15:00Z",
+      "feature_value": -0.0132110830734261,
+      "low_threshold": -0.019545157125130854,
+      "high_threshold": 0.020643022165240422,
+      "signal": "NO_TRADE",
+      "reason": "inside_calibrated_deciles"
+    },
+    {
+      "id": "6c6c0976-0293-4503-bedb-c14b242bf136",
+      "symbol": "ETH/USDT",
+      "observed_at": "2026-10-28T10:41:53.036605Z",
+      "context_timestamp": "2026-10-28T10:15:00Z",
+      "feature_value": 0.00888275456565446,
+      "low_threshold": -0.01949802950955428,
+      "high_threshold": 0.020743615937876794,
+      "signal": "NO_TRADE",
+      "reason": "inside_calibrated_deciles"
+    }
+  ],
+  "idempotency_check": {
+    "repeated_capture_inserted_rows": 0,
+    "passed": true
+  },
+  "migrations": [
+    "20261028104144_add_v51_forward_signal_recorder.sql",
+    "20261028104221_index_v51_signal_snapshot_foreign_keys.sql"
+  ],
+  "security": {
+    "new_public_access_added": false,
+    "function_security": "SECURITY INVOKER",
+    "public_execute_revoked": true,
+    "anon_execute_revoked": true,
+    "authenticated_execute_revoked": true
+  },
+  "conclusion": "Forward V5.1 deterministic evidence is now captured automatically inside Supabase without requiring the LLM runtime. Both first snapshots are NO_TRADE, so no agent cycle or paper position is warranted at this context."
+}

@@ -1,0 +1,132 @@
+{
+  "checkpoint_type": "V5.1_FORWARD_EVIDENCE",
+  "generated_from": "supabase_runtime_state",
+  "generated_at_utc": "2026-10-28T11:28:47.320543Z",
+  "strategy_version": "V5.1",
+  "experiment_version": "V5.1-PAPER",
+  "safety": {
+    "trading_mode": "paper",
+    "live_trading": false,
+    "default_action": "NO_TRADE",
+    "protocol_mutated": false,
+    "thresholds_tuned": false
+  },
+  "frozen_protocol": {
+    "feature": "global_long_short_change_1h",
+    "relationship": "negative_contrarian",
+    "horizon_minutes": 180,
+    "context_lag_minutes": 15,
+    "round_trip_cost": 0.0015,
+    "calibration_protocol_hash": "84c9370ad5c25383cef7b7c00be15b24d0c5f6f636742e925a78779b47a017ef",
+    "paper_experiment_config_hash": "b76546273434b348543fb4cd92d86ac0842e8b48c374fcaa83f37c8e08cfc2d0",
+    "thresholds": {
+      "BTC/USDT": {
+        "low": -0.019545157125130854,
+        "high": 0.020643022165240422
+      },
+      "ETH/USDT": {
+        "low": -0.01949802950955428,
+        "high": 0.020743615937876794
+      }
+    }
+  },
+  "prospective_live": {
+    "BTC/USDT": {
+      "snapshot_count": 4,
+      "long_count": 0,
+      "short_count": 0,
+      "no_trade_count": 4,
+      "latest_context_timestamp": "2026-10-28T11:00:00Z",
+      "latest_feature_value": -0.00352160732363305,
+      "latest_signal": "NO_TRADE"
+    },
+    "ETH/USDT": {
+      "snapshot_count": 4,
+      "long_count": 0,
+      "short_count": 0,
+      "no_trade_count": 4,
+      "latest_context_timestamp": "2026-10-28T11:00:00Z",
+      "latest_feature_value": 0.00731740186532792,
+      "latest_signal": "NO_TRADE"
+    }
+  },
+  "data_integrity_last_3h": {
+    "BTCUSDT": {
+      "candles_15m_rows": 12,
+      "candle_non_15m_steps": 0,
+      "latest_candle_open": "2026-10-28T11:15:00Z",
+      "ratio_5m_rows": 34,
+      "ratio_non_5m_steps": 0,
+      "latest_ratio_observed_at": "2026-10-28T11:15:00Z"
+    },
+    "ETHUSDT": {
+      "candles_15m_rows": 12,
+      "candle_non_15m_steps": 0,
+      "latest_candle_open": "2026-10-28T11:15:00Z",
+      "ratio_5m_rows": 34,
+      "ratio_non_5m_steps": 0,
+      "latest_ratio_observed_at": "2026-10-28T11:15:00Z"
+    }
+  },
+  "reconstructed_oos": {
+    "BTC/USDT": {
+      "evaluated_trade_count": 5,
+      "hit_rate": 0.6,
+      "mean_gross_return": 0.002502605986660731,
+      "mean_net_return": 0.001002605986660731,
+      "median_net_return": 0.000662958560833983,
+      "profit_factor": 5.218205435528873,
+      "gate_state": "INSUFFICIENT_SAMPLE"
+    },
+    "ETH/USDT": {
+      "evaluated_trade_count": 5,
+      "hit_rate": 0.4,
+      "mean_gross_return": 0.0008336080928048089,
+      "mean_net_return": -0.000666391907195191,
+      "median_net_return": -0.0028875351672065,
+      "profit_factor": 0.7685163577216255,
+      "gate_state": "INSUFFICIENT_SAMPLE"
+    },
+    "minimum_trades_per_symbol": 80,
+    "pending_outcomes": [
+      {
+        "selection_id": "473de1e6-e211-4eba-a8d8-3866e77abf21",
+        "symbol": "ETH/USDT",
+        "side": "LONG",
+        "context_timestamp": "2026-10-28T08:45:00Z",
+        "exit_candle_open_time": "2026-10-28T11:45:00Z"
+      },
+      {
+        "selection_id": "32f5e171-93ea-4232-845b-105047ca7e7c",
+        "symbol": "BTC/USDT",
+        "side": "LONG",
+        "context_timestamp": "2026-10-28T09:00:00Z",
+        "exit_candle_open_time": "2026-10-28T12:00:00Z"
+      }
+    ]
+  },
+  "watchdog": {
+    "latest_status": "healthy",
+    "latest_checked_at": "2026-10-28T11:14:00Z",
+    "active_calibrations": 2,
+    "active_pipeline_jobs": 5,
+    "recent_success_pipeline_jobs": 5,
+    "expected_active_pipeline_jobs": 5
+  },
+  "cron": {
+    "collector_btc_active": true,
+    "collector_eth_active": true,
+    "backfill_dispatch_active": true,
+    "backfill_recover_active": true,
+    "forward_signal_capture_active": true,
+    "forward_rule_selector_active": true,
+    "forward_rule_evaluator_active": true,
+    "forward_watchdog_active": true
+  },
+  "interpretation": {
+    "prospective_candidate_available": false,
+    "external_agent_cycle_required_now": false,
+    "qualification_claimed": false,
+    "notes": "Prospective evidence remains NO_TRADE for both symbols. Reconstructed OOS sample is far below the frozen minimum and must not be treated as qualification evidence."
+  }
+}

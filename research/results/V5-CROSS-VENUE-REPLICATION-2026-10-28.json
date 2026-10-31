@@ -1,0 +1,101 @@
+{
+  "experiment": "V5-CROSS-VENUE-REPLICATION-2026-10-28",
+  "status": "passed_research_evidence_gate_not_trading_activation",
+  "methodology": "Bybit 15m target returns with Binance USD-M derivatives context lagged by 15 minutes; two disjoint 90-day 2024 windows; four-fold stability screen; 15 bps round-trip cost adjustment; pure derivatives features only for final replication.",
+  "windows": {
+    "discovery_end": "2024-11-30",
+    "replication_end": "2024-08-31",
+    "days_each": 90
+  },
+  "data_quality": {
+    "discovery": {
+      "BTCUSDT": 1,
+      "ETHUSDT": 1
+    },
+    "replication": {
+      "BTCUSDT": 0.9997685185185186,
+      "ETHUSDT": 0.9997685185185186
+    }
+  },
+  "per_window": {
+    "BTCUSDT": {
+      "discovery_pure_qualified": 7,
+      "replication_pure_qualified": 17
+    },
+    "ETHUSDT": {
+      "discovery_pure_qualified": 9,
+      "replication_pure_qualified": 14
+    }
+  },
+  "cross_symbol_replicated_count": 4,
+  "cross_symbol_replicated": [
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 12,
+      "horizon_minutes": 180,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.34301340885933446,
+      "worst_cost_adjusted_decile_spread": 0.010799007794681705,
+      "windows": 4,
+      "interpretation": "Higher 1h change in global long/short positioning was consistently associated with lower subsequent returns; contrarian evidence."
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 24,
+      "horizon_minutes": 360,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.2656337947056037,
+      "worst_cost_adjusted_decile_spread": 0.010733669327646462,
+      "windows": 4,
+      "interpretation": "Same contrarian positioning effect persisted at 6h horizon."
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 48,
+      "horizon_minutes": 720,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.1906740379619829,
+      "worst_cost_adjusted_decile_spread": 0.011844584516038347,
+      "windows": 4,
+      "interpretation": "Same contrarian positioning effect persisted at 12h horizon."
+    },
+    {
+      "feature": "top_account_long_short_log",
+      "horizon_candles": 12,
+      "horizon_minutes": 180,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.09814782047218876,
+      "worst_cost_adjusted_decile_spread": 0.0017273609611309,
+      "windows": 4,
+      "interpretation": "More long-skewed top-account positioning was consistently associated with weaker subsequent 3h returns."
+    }
+  ],
+  "strongest_candidate": {
+    "feature": "global_long_short_change_1h",
+    "horizon_candles": 12,
+    "horizon_minutes": 180,
+    "sign": "negative",
+    "discovery": {
+      "BTCUSDT": {
+        "mean_rank_ic": -0.37596153721775993,
+        "spread": 0.010799007794681705
+      },
+      "ETHUSDT": {
+        "mean_rank_ic": -0.39434450001824,
+        "spread": 0.0125457513000987
+      }
+    },
+    "replication": {
+      "BTCUSDT": {
+        "mean_rank_ic": -0.34301340885933446,
+        "spread": 0.012417931459260765
+      },
+      "ETHUSDT": {
+        "mean_rank_ic": -0.43484064455017735,
+        "spread": 0.013781135265918218
+      }
+    }
+  },
+  "default_action": "NO_TRADE",
+  "next_gate": "Translate replicated evidence into a preregistered V5.1 deterministic signal and test on a third untouched time window before any paper-trade activation."
+}

@@ -1,0 +1,185 @@
+{
+  "experiment": "V5.1-DAY1-RECONSTRUCTED-OOS-2026-10-28",
+  "paper_only": true,
+  "live_trading": false,
+  "capture_mode": "reconstructed_oos",
+  "scientific_status": "preliminary",
+  "forward_window": {
+    "start": "2026-10-27",
+    "end": "2026-12-25"
+  },
+  "frozen_protocol": {
+    "strategy_version": "V5.1",
+    "feature": "global_long_short_change_1h",
+    "relationship": "negative",
+    "horizon_minutes": 180,
+    "context_lag_minutes": 15,
+    "round_trip_cost": 0.0015,
+    "calibration_end": "2026-10-26",
+    "calibration_config_hash": "84c9370ad5c25383cef7b7c00be15b24d0c5f6f636742e925a78779b47a017ef",
+    "experiment_config_hash": "b76546273434b348543fb4cd92d86ac0842e8b48c374fcaa83f37c8e08cfc2d0"
+  },
+  "gap_recovery": {
+    "reason": "Prospective recorder started after the forward window opened, so the missing opening period was reconstructed from persisted public market data using the already-frozen protocol.",
+    "collector_region": "eu-west-3",
+    "secret_handling": "Existing Vault-backed collector key; secret value was never exposed.",
+    "backfill_jobs": [
+      {
+        "symbol": "BTCUSDT",
+        "queue_id": "aefc7538-d8ce-46dd-8135-b96d52b8b7cf",
+        "range_utc": "2026-10-27T00:00:00Z/2026-10-28T11:00:00Z",
+        "qualification_ready": true,
+        "candle_coverage": 1,
+        "binance_ratio_coverage": 1
+      },
+      {
+        "symbol": "ETHUSDT",
+        "queue_id": "59568777-3d68-4466-aa9b-4e1be62a1d5b",
+        "range_utc": "2026-10-27T00:00:00Z/2026-10-28T11:00:00Z",
+        "qualification_ready": true,
+        "candle_coverage": 1,
+        "binance_ratio_coverage": 1
+      },
+      {
+        "symbol": "BTCUSDT",
+        "queue_id": "14975010-bbec-401b-986c-d1a795703a97",
+        "range_utc": "2026-10-26T23:00:00Z/2026-10-27T01:00:00Z",
+        "qualification_ready": true
+      },
+      {
+        "symbol": "ETHUSDT",
+        "queue_id": "4e9a7b06-fe41-4619-807c-aaac17b825f4",
+        "range_utc": "2026-10-26T23:00:00Z/2026-10-27T01:00:00Z",
+        "qualification_ready": true
+      },
+      {
+        "symbol": "BTCUSDT",
+        "queue_id": "307f4784-4314-4997-a790-c4de43cfaffe",
+        "range_utc": "2026-10-26T22:45:00Z/2026-10-26T23:15:00Z",
+        "qualification_ready": true
+      },
+      {
+        "symbol": "ETHUSDT",
+        "queue_id": "95a7a397-bc63-4edc-8bab-aeeb5a3659c4",
+        "range_utc": "2026-10-26T22:45:00Z/2026-10-26T23:15:00Z",
+        "qualification_ready": true
+      }
+    ],
+    "final_input_quality": {
+      "binance_5m_contexts_contiguous": true,
+      "bybit_15m_candles_contiguous": true,
+      "forward_contexts_per_symbol": 137,
+      "context_start": "2026-10-27T00:00:00Z",
+      "context_end": "2026-10-28T10:00:00Z"
+    }
+  },
+  "signals": {
+    "BTC_USDT": {
+      "contexts": 137,
+      "long": 19,
+      "short": 5,
+      "no_trade": 113
+    },
+    "ETH_USDT": {
+      "contexts": 137,
+      "long": 21,
+      "short": 7,
+      "no_trade": 109
+    }
+  },
+  "non_overlapping_selections": {
+    "policy": "next candidate must be strictly after prior entry context + 180m",
+    "BTC_USDT": {
+      "total": 6,
+      "first_context": "2026-10-27T03:15:00Z",
+      "last_context": "2026-10-28T09:00:00Z"
+    },
+    "ETH_USDT": {
+      "total": 6,
+      "first_context": "2026-10-27T07:00:00Z",
+      "last_context": "2026-10-28T08:45:00Z"
+    }
+  },
+  "mature_outcomes": {
+    "evaluated": 10,
+    "pending": 2,
+    "BTC_USDT": {
+      "evaluated_trades": 5,
+      "long_count": 4,
+      "short_count": 1,
+      "hit_rate": 0.6,
+      "mean_gross_return": 0.002502605986660731,
+      "mean_net_return": 0.001002605986660731,
+      "median_net_return": 0.000662958560833983,
+      "profit_factor": 5.218205435528873
+    },
+    "ETH_USDT": {
+      "evaluated_trades": 5,
+      "long_count": 3,
+      "short_count": 2,
+      "hit_rate": 0.4,
+      "mean_gross_return": 0.0008336080928048089,
+      "mean_net_return": -0.000666391907195191,
+      "median_net_return": -0.0028875351672065,
+      "profit_factor": 0.7685163577216255
+    },
+    "combined": {
+      "evaluated_trades": 10,
+      "wins": 5,
+      "hit_rate": 0.5,
+      "mean_gross_return": 0.00166810703973277,
+      "mean_net_return": 0.00016810703973276994,
+      "median_net_return": 0.0000232036444612257,
+      "profit_factor": 1.1078829274338513,
+      "cumulative_compounded_return": 0.00157259934369591,
+      "max_drawdown": 0.00771976503109874
+    }
+  },
+  "pending_outcomes": [
+    {
+      "selection_id": "473de1e6-e211-4eba-a8d8-3866e77abf21",
+      "symbol": "ETH/USDT",
+      "side": "LONG",
+      "context_timestamp": "2026-10-28T08:45:00Z",
+      "entry_price": 2371.18,
+      "exit_candle_open_time": "2026-10-28T11:45:00Z"
+    },
+    {
+      "selection_id": "32f5e171-93ea-4232-845b-105047ca7e7c",
+      "symbol": "BTC/USDT",
+      "side": "LONG",
+      "context_timestamp": "2026-10-28T09:00:00Z",
+      "entry_price": 81510.8,
+      "exit_candle_open_time": "2026-10-28T12:00:00Z"
+    }
+  ],
+  "prospective_live_state": {
+    "BTC_USDT": {
+      "snapshots": 3,
+      "long": 0,
+      "short": 0,
+      "no_trade": 3,
+      "latest_context": "2026-10-28T10:45:00Z"
+    },
+    "ETH_USDT": {
+      "snapshots": 3,
+      "long": 0,
+      "short": 0,
+      "no_trade": 3,
+      "latest_context": "2026-10-28T10:45:00Z"
+    }
+  },
+  "execution_safety": {
+    "agent_runs": 0,
+    "consensus_decisions": 0,
+    "risk_evaluations": 0,
+    "paper_trades": 0,
+    "reconstructed_research_is_not_execution": true
+  },
+  "interpretation": {
+    "BTC": "Early reconstructed OOS results are positive after the frozen 15 bps cost, but only five mature trades exist.",
+    "ETH": "Early reconstructed OOS results are negative after the frozen 15 bps cost, with only five mature trades.",
+    "combined": "Ten mature trades are insufficient for a qualification decision. No thresholds, horizon, lag, cost, or model settings were changed in response to these results."
+  },
+  "migration": "20261028111931_backfill_v51_forward_day1_reconstructed_oos.sql"
+}

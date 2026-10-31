@@ -1,0 +1,49 @@
+{
+  "experiment": "V5.1-EVIDENCE-PREFLIGHT-2026-10-28",
+  "status": "evidence_preflight_passed_full_agent_cycle_not_executed",
+  "paper_only": true,
+  "real_money_authorized": false,
+  "default_action": "NO_TRADE",
+  "data_path": "Supabase Paris collector -> market_binance_global_ratio_5m -> 15m aggregation -> 15m lag -> 1h log-ratio change -> frozen V5.1 thresholds",
+  "source_runtime": {
+    "collector": "collect-derivatives-v1",
+    "collector_version": 9,
+    "edge_region": "eu-west-3",
+    "github_us_binance_live_probe_http_status": 451,
+    "supabase_paris_binance_probe_http_status": 200
+  },
+  "observed_at_utc": "2026-10-28T10:24:05Z",
+  "BTCUSDT": {
+    "latest_context": "2026-10-28T10:00:00Z",
+    "one_hour_prior_context": "2026-10-28T09:00:00Z",
+    "latest_ratio": 1.849,
+    "prior_ratio": 1.8927,
+    "feature_value": -0.0233594286577488,
+    "low_threshold": -0.0195451571251309,
+    "high_threshold": 0.0206430221652404,
+    "context_age_ms": 1445261,
+    "evidence_signal": "LONG",
+    "action": "CONTINUE_TO_AGENT_CONSENSUS_WHEN_RUNTIME_IS_AVAILABLE"
+  },
+  "ETHUSDT": {
+    "latest_context": "2026-10-28T10:00:00Z",
+    "one_hour_prior_context": "2026-10-28T09:00:00Z",
+    "latest_ratio": 2.873,
+    "prior_ratio": 2.867,
+    "feature_value": 0.00209059309591986,
+    "low_threshold": -0.0194980295095543,
+    "high_threshold": 0.0207436159378768,
+    "context_age_ms": 1445261,
+    "evidence_signal": "NO_TRADE",
+    "action": "FAIL_CLOSED_BEFORE_AGENTS"
+  },
+  "fail_closed_guards_verified_by_ci": [
+    "untrained evidence => NO_TRADE",
+    "V5.1 NO_TRADE evidence => stop before agents",
+    "V5.1 direction disagreement with full agent consensus => NO_TRADE",
+    "missing/expired calibration => NO_TRADE",
+    "stale/missing Binance evidence => NO_TRADE"
+  ],
+  "full_cycle_blocker": "No TriConsensus backend runtime/deployment is linked in Vercel, so the OpenRouter-backed 3-agent paper cycle was not executed. No deployment or secret movement was performed implicitly.",
+  "conclusion": "The deterministic evidence gate is operational. BTC currently qualifies as a LONG evidence candidate, while ETH is NO_TRADE. BTC is not a paper trade until Market Intelligence, Strategist, Critic and the deterministic Risk Engine all approve it."
+}

@@ -1,0 +1,76 @@
+{
+  "experiment": "V5.1-E2E-SYNTHETIC-AND-WATCHDOG-2026-10-28T1114Z",
+  "paper_only": true,
+  "live_trading": false,
+  "branch": "feat/v1-foundation",
+  "e2e_test": {
+    "commit": "54111e86b49ac32ced9d45c7fe2a56b16240abf7",
+    "workflow_run_id": 40678247307,
+    "result": "success",
+    "backend_tests": {
+      "passed": 173,
+      "failed": 0,
+      "duration_seconds": 21.87
+    },
+    "covered_path": [
+      "V5.1 LONG evidence",
+      "market snapshot",
+      "feature calculation",
+      "three-agent full consensus",
+      "deterministic risk approval",
+      "paper execution fill",
+      "audit persistence path"
+    ],
+    "network_or_money_used": false
+  },
+  "automatic_watchdog": {
+    "cron_job_id": 8,
+    "first_automatic_run_at": "2026-10-28T11:14:00.018333Z",
+    "cron_status": "succeeded",
+    "health_status": "healthy",
+    "active_calibrations": 2,
+    "active_pipeline_jobs": 5,
+    "recent_success_pipeline_jobs": 5,
+    "btc_latest_ratio_at": "2026-10-28T11:00:00Z",
+    "eth_latest_ratio_at": "2026-10-28T11:00:00Z",
+    "btc_latest_signal_context": "2026-10-28T10:45:00Z",
+    "eth_latest_signal_context": "2026-10-28T10:45:00Z",
+    "critical_events": 0
+  },
+  "latest_forward_signals": {
+    "BTC_USDT": {
+      "context_timestamp": "2026-10-28T10:45:00Z",
+      "feature_value": -0.00351855723385641,
+      "low_threshold": -0.019545157125130854,
+      "high_threshold": 0.020643022165240422,
+      "signal": "NO_TRADE"
+    },
+    "ETH_USDT": {
+      "context_timestamp": "2026-10-28T10:45:00Z",
+      "feature_value": 0.00834497193218064,
+      "low_threshold": -0.01949802950955428,
+      "high_threshold": 0.020743615937876794,
+      "signal": "NO_TRADE"
+    }
+  },
+  "scientific_forward_state": {
+    "selections": 0,
+    "outcomes": 0,
+    "agent_runs_in_live_forward": 0,
+    "consensus_decisions_in_live_forward": 0,
+    "risk_evaluations_in_live_forward": 0,
+    "paper_trades_in_live_forward": 0,
+    "explanation": "No live forward signal crossed the frozen decile thresholds, so the correct action remains NO_TRADE and agents are not invoked."
+  },
+  "safety": {
+    "main_touched": false,
+    "pr_merge_requested": false,
+    "thresholds_changed": false,
+    "horizon_changed": false,
+    "lag_changed": false,
+    "cost_changed": false,
+    "llm_provider_changed": false,
+    "paid_ai_gateway_request_made": false
+  },
+  "conclusion": "The deterministic forward pipeline is healthy and the full paper execution path is now independently proven by a no-network synthetic E2E test. Real forward data still indicates NO_TRADE for both symbols."
+}

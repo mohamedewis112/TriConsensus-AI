@@ -1,0 +1,78 @@
+{
+  "experiment": "V4.2-ENTRY-EVENT-STUDY-2026-10-28",
+  "status": "rejected_candidate_horizons_only",
+  "setup_version": "v4.1-frozen-quant-setups",
+  "methodology": "Frozen setup entry event study across H4/H12/H24/H48 15m candles; non-overlapping event windows within setup+side; 15 bps round-trip cost; same stability/bootstrap gate.",
+  "conclusion": "No setup-horizon primary edge passed the evidence gate for BTC or ETH. Positive pockets remain research-only.",
+  "BTCUSDT": {
+    "window": {
+      "days": 300,
+      "end_date": "2024-11-30"
+    },
+    "event_count": 4492,
+    "qualified_primary_count": 0,
+    "entry_edge_passed": false,
+    "candidate_horizons": [
+      {
+        "setup": "breakout",
+        "side": "LONG",
+        "horizon_candles": 24,
+        "trades": 125,
+        "hit_rate": 0.416,
+        "mean_net_return": 0.0014045457465108342,
+        "profit_factor": 1.3140533823334404,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0006305874188996075
+      },
+      {
+        "setup": "breakout",
+        "side": "LONG",
+        "horizon_candles": 48,
+        "trades": 125,
+        "hit_rate": 0.496,
+        "mean_net_return": 0.0017183693176722056,
+        "profit_factor": 1.2790385296887603,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0010946598300796487
+      }
+    ]
+  },
+  "ETHUSDT": {
+    "window": {
+      "days": 244,
+      "end_date": "2024-11-30",
+      "coverage_ratio": 1
+    },
+    "event_count": 4112,
+    "qualified_primary_count": 0,
+    "entry_edge_passed": false,
+    "candidate_horizons": [
+      {
+        "setup": "range_reversion",
+        "side": "SHORT",
+        "horizon_candles": 4,
+        "trades": 24,
+        "hit_rate": 0.7083333333333334,
+        "mean_net_return": 0.0022393227492922287,
+        "profit_factor": 2.415705901237966,
+        "profitable_folds": 4,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.00018703107360185559
+      },
+      {
+        "setup": "range_reversion",
+        "side": "SHORT",
+        "horizon_candles": 12,
+        "trades": 24,
+        "hit_rate": 0.6666666666666666,
+        "mean_net_return": 0.00274191608212617,
+        "profit_factor": 2.1099078633468116,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0007055883605605187
+      }
+    ]
+  }
+}
