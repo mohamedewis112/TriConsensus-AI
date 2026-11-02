@@ -32,6 +32,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt "scikit-learn>=1.6,<2" "pytest>=8.3,<9"
 
+      - name: Compile V7 modules
+        run: python -m py_compile backend/triconsensus/v7_*.py
+
       - name: Run V7 tests
         env:
           PYTHONPATH: backend
