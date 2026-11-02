@@ -186,6 +186,44 @@ def summarize_species(observations: list[dict]) -> list[dict]:
     return summaries
 
 
+def summarize_species_regime(observations: list[dict]) -> list[dict]:
+    groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    for row in observations:
+        groups[(str(row["species"]), str(row["regime"]), str(row["side"]))].append(row)
+
+    summaries: list[dict] = []
+    for (species, regime, side), rows in sorted(groups.items()):
+        selected = _non_overlapping(rows)
+        values = [float(row["net_return_180m"]) for row in selected]
+        summaries.append(
+            {
+                "species": species,
+                "regime": regime,
+                "side": side,
+                "candidates": len(rows),
+                "trades": len(values),
+                "wins": sum(1 for x in values if x > 0),
+                "hit_rate": (
+                    sum(1 for x in values if x > 0) / len(values)
+                    if values else 0.0
+                ),
+                "mean_net_return": float(np.mean(values)) if values else 0.0,
+                "profit_factor": _profit_factor(values),
+                "max_drawdown": _max_drawdown(values),
+            }
+        )
+    return sorted(
+        summaries,
+        key=lambda row: (
+            row["profit_factor"] is not None,
+            row["profit_factor"] or 0.0,
+            row["mean_net_return"],
+            row["trades"],
+        ),
+        reverse=True,
+    )
+
+
 def _meta_dataset(observations: list[dict]) -> tuple[pd.DataFrame, pd.Series, pd.Series, list[int]]:
     ordered = sorted(observations, key=lambda row: (row["timestamp_ms"], row["species"], row["side"]))
     if not ordered:
@@ -359,6 +397,7 @@ async def run_v7_research(
         raise ValueError("V7 qualification requires >=90% archive coverage")
 
     species = summarize_species(observations)
+    species_regime = summarize_species_regime(observations)
     meta = evaluate_logistic_meta_label(observations)
     report = {
         "experiment": "V7-SIGNAL-LAB",
@@ -387,6 +426,7 @@ async def run_v7_research(
         "data_quality": quality,
         "volatility_thresholds": thresholds,
         "species": species,
+        "species_regime": species_regime,
         "meta_label": meta,
         "generated_at": datetime.now(UTC).isoformat(),
     }
