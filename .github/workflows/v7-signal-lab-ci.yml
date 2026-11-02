@@ -1,0 +1,54 @@
+name: V7 Signal Lab CI
+
+on:
+  push:
+    branches: ["feat/**"]
+    paths:
+      - "backend/triconsensus/v7_*.py"
+      - "tests/test_v7_*.py"
+      - "research/v7/**"
+      - ".github/workflows/v7-signal-lab-ci.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "backend/triconsensus/v7_*.py"
+      - "tests/test_v7_*.py"
+      - "research/v7/**"
+      - ".github/workflows/v7-signal-lab-ci.yml"
+
+jobs:
+  v7-research-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install V7 test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "scikit-learn>=1.6,<2" "pytest>=8.3,<9"
+
+      - name: Run V7 tests
+        env:
+          PYTHONPATH: backend
+        run: pytest -q tests/test_v7_*.py
+
+      - name: Verify research-only contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          signal = Path("backend/triconsensus/v7_signal_lab.py").read_text()
+          research = Path("backend/triconsensus/v7_research.py").read_text()
+          protocol = Path("research/v7/V7-SIGNAL-LAB.md").read_text()
+          assert 'live_shadow_only' in signal
+          assert '"paper_trading_authority": False' in research
+          assert '"live_trading_authority": False' in research
+          assert '"v51_protocol_changed": False' in research
+          assert "No historical order-book backtest is fabricated" in protocol
+          assert "paper_executor" not in signal + research
+          assert "marl_reward_memory" not in signal + research
+          PY
