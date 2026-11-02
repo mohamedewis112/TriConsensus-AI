@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt "scikit-learn>=1.6,<2"
 
-      - name: Run fixed 45-day V7 research window
+      - name: Run fixed 365-day V7 research window
         env:
           PYTHONPATH: backend
         run: |
