@@ -379,6 +379,7 @@ async def run_v7_research(
         "embargo_minutes": 180,
         "untouched_holdout_fraction": 0.20,
         "hyperparameter_search": False,
+        "qualification_scope": "development_only_until_future_preregistered_shadow_holdout",
         "live_trading_authority": False,
         "paper_trading_authority": False,
         "v51_protocol_changed": False,
