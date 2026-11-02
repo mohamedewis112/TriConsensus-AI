@@ -1,0 +1,39 @@
+name: V7 Fast Smoke
+
+on:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - ".github/workflows/v7-fast-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: [BTCUSDT, ETHUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "scikit-learn>=1.6,<2"
+      - name: Run 30-day development smoke
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.v7_research \
+            --symbol "${{ matrix.symbol }}" \
+            --days 30 \
+            --end-date 2026-10-20 \
+            --output-dir "smoke/${{ matrix.symbol }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "v7-smoke-${{ matrix.symbol }}"
+          path: "smoke/${{ matrix.symbol }}/v7-report.json"
+          if-no-files-found: error
