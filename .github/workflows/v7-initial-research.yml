@@ -12,7 +12,7 @@ on:
 jobs:
   initial-development-window:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m triconsensus.v7_research \
             --symbol "${{ matrix.symbol }}" \
-            --days 90 \
+            --days 365 \
             --end-date 2026-10-20 \
             --output-dir "research-output/${{ matrix.symbol }}"
 
