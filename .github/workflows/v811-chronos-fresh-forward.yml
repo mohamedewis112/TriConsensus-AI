@@ -7,6 +7,7 @@ on:
     paths:
       - "research-trigger/v811-fresh-forward.txt"
       - "backend/triconsensus/chronos_forward_shadow.py"
+      - "backend/triconsensus/chronos_public_live.py"
       - ".github/workflows/v811-chronos-fresh-forward.yml"
 
 permissions:
