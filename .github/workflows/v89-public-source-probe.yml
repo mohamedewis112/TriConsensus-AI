@@ -1,0 +1,29 @@
+name: V8.9 Public Market Source Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v89-source-probe.txt"
+      - "backend/triconsensus/chronos_public_probe.py"
+      - ".github/workflows/v89-public-source-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal dependencies
+        run: pip install "httpx>=0.28,<1" "numpy>=2.1,<3"
+      - name: Probe Bybit and Binance public market sources
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.chronos_public_probe
