@@ -7,6 +7,7 @@ on:
     paths:
       - "research-trigger/v89-source-probe.txt"
       - "backend/triconsensus/chronos_public_probe.py"
+      - "backend/triconsensus/chronos_public_live.py"
       - ".github/workflows/v89-public-source-probe.yml"
 
 permissions:
