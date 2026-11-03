@@ -17,18 +17,37 @@ jobs:
       matrix:
         include:
           - period: Q1
+            symbol: BTCUSDT
+            days: 91
+            end_date: "2026-01-19"
+          - period: Q1
+            symbol: ETHUSDT
             days: 91
             end_date: "2026-01-19"
           - period: Q2
+            symbol: BTCUSDT
+            days: 91
+            end_date: "2026-04-20"
+          - period: Q2
+            symbol: ETHUSDT
             days: 91
             end_date: "2026-04-20"
           - period: Q3
+            symbol: BTCUSDT
+            days: 91
+            end_date: "2026-07-20"
+          - period: Q3
+            symbol: ETHUSDT
             days: 91
             end_date: "2026-07-20"
           - period: Q4
+            symbol: BTCUSDT
             days: 92
             end_date: "2026-10-20"
-        symbol: [BTCUSDT, ETHUSDT]
+          - period: Q4
+            symbol: ETHUSDT
+            days: 92
+            end_date: "2026-10-20"
 
     steps:
       - uses: actions/checkout@v4
