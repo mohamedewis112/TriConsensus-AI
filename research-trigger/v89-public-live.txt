@@ -1,1 +1,1 @@
-trigger v8.9 public live shadow
+trigger v8.9 public live shadow on OKX+Coinbase stable head
