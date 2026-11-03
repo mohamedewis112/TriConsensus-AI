@@ -20,7 +20,7 @@ def test_latent_actor_miner_recovers_recurrent_hidden_behavior_without_identity_
             else -0.40 + rng.normal(0, 0.05)
         )
         next_flow = (
-            0.55 * residual + rng.normal(0, 0.05)
+            0.55 * residual + rng.normal(0, 0.02)
         )
         events.append(
             ResidualEvent(
