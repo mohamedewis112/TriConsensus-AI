@@ -18,7 +18,7 @@ from .chronos_memory import MarketMemoryIndex
 from .v6_microstructure import depth_metrics
 
 
-BYBIT = "https://api.bybit.com"
+BYBIT = "https://api.bytick.com"
 BINANCE = "https://fapi.binance.com"
 
 
