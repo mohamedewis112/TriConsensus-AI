@@ -1,1 +1,1 @@
-trigger v8.11 fresh forward shadow
+trigger v8.11 fresh forward on OKX+Coinbase stable head
