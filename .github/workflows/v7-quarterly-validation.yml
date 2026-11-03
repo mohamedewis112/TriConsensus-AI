@@ -1,0 +1,211 @@
+name: V7 Quarterly Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - ".github/workflows/v7-quarterly-validation.yml"
+
+jobs:
+  quarter-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - period: Q1
+            days: 91
+            end_date: "2026-01-19"
+          - period: Q2
+            days: 91
+            end_date: "2026-04-20"
+          - period: Q3
+            days: 91
+            end_date: "2026-07-20"
+          - period: Q4
+            days: 92
+            end_date: "2026-10-20"
+        symbol: [BTCUSDT, ETHUSDT]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install V7 research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "scikit-learn>=1.6,<2"
+
+      - name: Run frozen V7.0 quarter
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.v7_research \
+            --symbol "${{ matrix.symbol }}" \
+            --days "${{ matrix.days }}" \
+            --end-date "${{ matrix.end_date }}" \
+            --output-dir "research-output/${{ matrix.period }}/${{ matrix.symbol }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "v7-quarter-${{ matrix.period }}-${{ matrix.symbol }}"
+          path: "research-output/${{ matrix.period }}/${{ matrix.symbol }}/v7-report.json"
+          if-no-files-found: error
+
+  aggregate:
+    needs: quarter-research
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "v7-quarter-*"
+          path: quarterly-artifacts
+
+      - name: Build quarterly stability matrix
+        shell: python
+        run: |
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          root = Path("quarterly-artifacts")
+          reports = []
+          end_to_period = {
+              "2026-01-19": "Q1",
+              "2026-04-20": "Q2",
+              "2026-07-20": "Q3",
+              "2026-10-20": "Q4",
+          }
+
+          for path in sorted(root.rglob("v7-report.json")):
+              report = json.loads(path.read_text(encoding="utf-8"))
+              report["_period"] = end_to_period.get(report["archive_end_day"], report["archive_end_day"])
+              reports.append(report)
+
+          if len(reports) != 8:
+              raise SystemExit(f"expected 8 reports, found {len(reports)}")
+
+          matrix = defaultdict(dict)
+          meta = {}
+          for report in reports:
+              period = report["_period"]
+              symbol = report["symbol"]
+              meta[f"{symbol}:{period}"] = report["meta_label"]
+              for row in report["species_regime"]:
+                  key = (symbol, row["species"], row["regime"], row["side"])
+                  matrix[key][period] = {
+                      "trades": row["trades"],
+                      "wins": row["wins"],
+                      "hit_rate": row["hit_rate"],
+                      "mean_net_return": row["mean_net_return"],
+                      "profit_factor": row["profit_factor"],
+                      "max_drawdown": row["max_drawdown"],
+                  }
+
+          rows = []
+          for key, quarters in matrix.items():
+              symbol, species, regime, side = key
+              positive_quarters = 0
+              total_trades = 0
+              weighted_net = 0.0
+              quarter_rows = {}
+              for period in ("Q1", "Q2", "Q3", "Q4"):
+                  q = quarters.get(period)
+                  quarter_rows[period] = q
+                  if not q:
+                      continue
+                  trades = int(q["trades"])
+                  total_trades += trades
+                  weighted_net += float(q["mean_net_return"]) * trades
+                  pf = q["profit_factor"]
+                  if (
+                      trades > 0
+                      and q["mean_net_return"] > 0
+                      and pf is not None
+                      and pf > 1.25
+                  ):
+                      positive_quarters += 1
+
+              rows.append({
+                  "symbol": symbol,
+                  "species": species,
+                  "regime": regime,
+                  "side": side,
+                  "positive_quarters_pf_gt_1_25": positive_quarters,
+                  "total_trades": total_trades,
+                  "weighted_mean_net_return": (
+                      weighted_net / total_trades if total_trades else 0.0
+                  ),
+                  "quarters": quarter_rows,
+              })
+
+          rows.sort(
+              key=lambda x: (
+                  x["positive_quarters_pf_gt_1_25"],
+                  x["weighted_mean_net_return"],
+                  x["total_trades"],
+              ),
+              reverse=True,
+          )
+
+          summary = {
+              "experiment": "V7-QUARTERLY-VALIDATION",
+              "frozen_signal_lab": "V7.0",
+              "coverage": {
+                  "Q1": {"days": 91, "start": "2025-10-21", "end": "2026-01-19"},
+                  "Q2": {"days": 91, "start": "2026-01-20", "end": "2026-04-20"},
+                  "Q3": {"days": 91, "start": "2026-04-21", "end": "2026-07-20"},
+                  "Q4": {"days": 92, "start": "2026-07-21", "end": "2026-10-20"},
+              },
+              "strategy_logic_changed": False,
+              "paper_trading_authority": False,
+              "live_trading_authority": False,
+              "stability_matrix": rows,
+              "meta_label_by_quarter": meta,
+          }
+
+          Path("v7-quarterly-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True),
+              encoding="utf-8",
+          )
+
+          print("=== V7 QUARTERLY VALIDATION SUMMARY ===")
+          print("reports:", len(reports))
+          print("Top 20 Strategy x Regime x Side rows:")
+          for row in rows[:20]:
+              print(json.dumps({
+                  "symbol": row["symbol"],
+                  "species": row["species"],
+                  "regime": row["regime"],
+                  "side": row["side"],
+                  "positive_quarters_pf_gt_1_25": row["positive_quarters_pf_gt_1_25"],
+                  "total_trades": row["total_trades"],
+                  "weighted_mean_net_return": row["weighted_mean_net_return"],
+                  "quarters": row["quarters"],
+              }, sort_keys=True))
+
+          print("=== META LABEL BY QUARTER ===")
+          for key in sorted(meta):
+              value = meta[key]
+              print(json.dumps({
+                  "key": key,
+                  "status": value.get("status"),
+                  "evidence_gate_passed": value.get("evidence_gate_passed"),
+                  "candidate_rows": value.get("candidate_rows"),
+                  "profitable_selection_folds": value.get("profitable_selection_folds"),
+                  "holdout": value.get("holdout"),
+              }, sort_keys=True))
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "v7-quarterly-summary"
+          path: "v7-quarterly-summary.json"
+          if-no-files-found: error
