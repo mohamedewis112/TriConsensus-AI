@@ -200,17 +200,51 @@ class FastHeadLedger:
             high = np.asarray([getattr(receipt, high_attr) for receipt, _ in pairs], dtype=float)
             return actual, predicted, baseline, low, high
 
+        price_actual, price_predicted, price_baseline, price_low, price_high = arrays(
+            "predicted_return",
+            "actual_return",
+            "baseline_return",
+            "return_low",
+            "return_high",
+        )
+        flow_actual, flow_predicted, flow_baseline, flow_low, flow_high = arrays(
+            "predicted_orderflow",
+            "actual_orderflow",
+            "baseline_orderflow",
+            "orderflow_low",
+            "orderflow_high",
+        )
+        liq_actual, liq_predicted, liq_baseline, liq_low, liq_high = arrays(
+            "predicted_liquidity_change",
+            "actual_liquidity_change",
+            "baseline_liquidity_change",
+            "liquidity_low",
+            "liquidity_high",
+        )
+
         price = self._metrics(
             target="next_return",
-            *arrays("predicted_return", "actual_return", "baseline_return", "return_low", "return_high"),
+            actual=price_actual,
+            predicted=price_predicted,
+            baseline=price_baseline,
+            low=price_low,
+            high=price_high,
         )
         flow = self._metrics(
             target="next_orderflow",
-            *arrays("predicted_orderflow", "actual_orderflow", "baseline_orderflow", "orderflow_low", "orderflow_high"),
+            actual=flow_actual,
+            predicted=flow_predicted,
+            baseline=flow_baseline,
+            low=flow_low,
+            high=flow_high,
         )
         liquidity = self._metrics(
             target="next_liquidity_change",
-            *arrays("predicted_liquidity_change", "actual_liquidity_change", "baseline_liquidity_change", "liquidity_low", "liquidity_high"),
+            actual=liq_actual,
+            predicted=liq_predicted,
+            baseline=liq_baseline,
+            low=liq_low,
+            high=liq_high,
         )
 
         reasons: list[str] = []
