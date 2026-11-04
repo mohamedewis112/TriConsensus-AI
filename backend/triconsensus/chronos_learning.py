@@ -124,6 +124,8 @@ class LearningCalibrationReport:
     targets: tuple[TargetCalibration, ...]
     mean_interval_coverage: float
     calibrated: bool
+    next_return_direction_deadzone: float
+    next_return_directional_sample_count: int
     next_return_directional_accuracy: float
     next_return_directional_wilson_lower_95: float
     next_return_correlation: float
@@ -265,24 +267,43 @@ class ProbabilisticTransitionEnsemble:
             )
         mean_coverage = float(np.mean([target.interval_coverage for target in targets]))
 
-        actual_return = y_eval[:, 0]
-        predicted_return = eval_mean[:, 0]
-        directional_hits = (predicted_return > 0.0) == (actual_return > 0.0)
-        directional_accuracy = float(np.mean(directional_hits))
-        hits = int(np.sum(directional_hits))
-        direction_n = len(directional_hits)
-        z95 = 1.959963984540054
-        phat = hits / direction_n
-        denominator = 1.0 + (z95 * z95) / direction_n
-        wilson_lower = (
-            phat
-            + (z95 * z95) / (2.0 * direction_n)
-            - z95
-            * math.sqrt(
-                (phat * (1.0 - phat)) / direction_n
-                + (z95 * z95) / (4.0 * direction_n * direction_n)
+        actual_return_all = y_eval[:, 0]
+        predicted_return_all = eval_mean[:, 0]
+        train_abs_nonzero = np.abs(y_train[:, 0])
+        train_abs_nonzero = train_abs_nonzero[train_abs_nonzero > 1e-12]
+        if len(train_abs_nonzero):
+            direction_deadzone = max(
+                1e-8,
+                float(np.quantile(train_abs_nonzero, 0.25)),
             )
-        ) / denominator
+        else:
+            direction_deadzone = 1e-8
+
+        active_mask = np.abs(actual_return_all) > direction_deadzone
+        actual_return = actual_return_all[active_mask]
+        predicted_return = predicted_return_all[active_mask]
+        direction_n = len(actual_return)
+
+        if direction_n:
+            directional_hits = np.sign(predicted_return) == np.sign(actual_return)
+            directional_accuracy = float(np.mean(directional_hits))
+            hits = int(np.sum(directional_hits))
+            z95 = 1.959963984540054
+            phat = hits / direction_n
+            denominator = 1.0 + (z95 * z95) / direction_n
+            wilson_lower = (
+                phat
+                + (z95 * z95) / (2.0 * direction_n)
+                - z95
+                * math.sqrt(
+                    (phat * (1.0 - phat)) / direction_n
+                    + (z95 * z95) / (4.0 * direction_n * direction_n)
+                )
+            ) / denominator
+        else:
+            directional_accuracy = 0.0
+            wilson_lower = 0.0
+
         return_correlation = 0.0
         if (
             direction_n >= 3
@@ -292,14 +313,15 @@ class ProbabilisticTransitionEnsemble:
             return_correlation = float(
                 np.corrcoef(actual_return, predicted_return)[0, 1]
             )
-        actual_mean = float(np.mean(actual_return))
-        predicted_mean = float(np.mean(predicted_return))
+        actual_mean = float(np.mean(actual_return)) if direction_n else 0.0
+        predicted_mean = float(np.mean(predicted_return)) if direction_n else 0.0
         mean_sign_agreement = bool(
-            np.sign(actual_mean) == np.sign(predicted_mean)
-            or (abs(actual_mean) < 1e-12 and abs(predicted_mean) < 1e-12)
+            direction_n > 0
+            and np.sign(actual_mean) == np.sign(predicted_mean)
         )
         predictive_skill = bool(
-            wilson_lower > 0.50
+            direction_n >= 20
+            and wilson_lower > 0.50
             and return_correlation > 0.0
             and mean_sign_agreement
         )
@@ -311,6 +333,8 @@ class ProbabilisticTransitionEnsemble:
             targets=tuple(targets),
             mean_interval_coverage=mean_coverage,
             calibrated=0.72 <= mean_coverage <= 1.0,
+            next_return_direction_deadzone=float(direction_deadzone),
+            next_return_directional_sample_count=int(direction_n),
             next_return_directional_accuracy=directional_accuracy,
             next_return_directional_wilson_lower_95=float(wilson_lower),
             next_return_correlation=return_correlation,
@@ -466,6 +490,8 @@ class LearningSafetyGate:
     sample_count: int
     calibrated: bool
     mean_interval_coverage: float
+    next_return_direction_deadzone: float
+    next_return_directional_sample_count: int
     next_return_directional_accuracy: float
     next_return_directional_wilson_lower_95: float
     next_return_correlation: float
@@ -489,6 +515,8 @@ def evaluate_learning_gate(
         reasons.append("model_not_fitted")
         coverage = 0.0
         calibrated = False
+        direction_deadzone = 0.0
+        directional_sample_count = 0
         directional_accuracy = 0.0
         directional_lower = 0.0
         return_correlation = 0.0
@@ -496,6 +524,8 @@ def evaluate_learning_gate(
     else:
         coverage = report.mean_interval_coverage
         calibrated = report.calibrated
+        direction_deadzone = report.next_return_direction_deadzone
+        directional_sample_count = report.next_return_directional_sample_count
         directional_accuracy = report.next_return_directional_accuracy
         directional_lower = report.next_return_directional_wilson_lower_95
         return_correlation = report.next_return_correlation
@@ -515,6 +545,8 @@ def evaluate_learning_gate(
         sample_count=sample_count,
         calibrated=calibrated,
         mean_interval_coverage=coverage,
+        next_return_direction_deadzone=direction_deadzone,
+        next_return_directional_sample_count=directional_sample_count,
         next_return_directional_accuracy=directional_accuracy,
         next_return_directional_wilson_lower_95=directional_lower,
         next_return_correlation=return_correlation,
