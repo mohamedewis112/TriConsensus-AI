@@ -4,6 +4,7 @@ import asyncio
 import calendar
 from datetime import UTC, date, datetime
 import json
+import re
 
 import httpx
 
@@ -47,6 +48,41 @@ async def probe_url(client: httpx.AsyncClient, url: str) -> dict:
             "url": url,
         }
 
+
+
+
+async def probe_directory_listing(
+    client: httpx.AsyncClient,
+    symbol: str,
+    year: int,
+) -> dict:
+    url = f"{MONTHLY_BASE}/{symbol}/{year:04d}/"
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        text = response.text
+        names = sorted(
+            set(
+                match
+                for match in re.findall(r'href=["\']([^"\']+\.csv\.gz)["\']', text)
+                if f"{symbol}_15_" in match
+            )
+        )
+        return {
+            "status": response.status_code,
+            "url": url,
+            "files": names,
+            "count": len(names),
+        }
+    except Exception as exc:
+        return {
+            "status": None,
+            "url": url,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "files": [],
+            "count": 0,
+        }
 
 
 async def probe_v5_15m(
@@ -94,7 +130,12 @@ async def probe_v5_15m(
 async def main() -> None:
     timeout = httpx.Timeout(30.0, connect=10.0)
     headers = {"User-Agent": "TriConsensus-AI/Q1-archive-probe"}
-    report: dict[str, object] = {"monthly": {}, "daily_samples": {}, "v5_15m": {}}
+    report: dict[str, object] = {
+        "monthly": {},
+        "daily_samples": {},
+        "v5_15m": {},
+        "directory_listings": {},
+    }
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
@@ -118,6 +159,11 @@ async def main() -> None:
             ):
                 daily[day.isoformat()] = await probe_url(client, daily_url(symbol, day))
             report["daily_samples"][symbol] = daily
+
+            report["directory_listings"][symbol] = {
+                "2025": await probe_directory_listing(client, symbol, 2025),
+                "2026": await probe_directory_listing(client, symbol, 2026),
+            }
 
             report["v5_15m"][symbol] = {
                 "2025-12": await probe_v5_15m(
