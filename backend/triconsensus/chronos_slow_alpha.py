@@ -118,5 +118,6 @@ def build_slow_alpha_evidence(
         holdout_mean_net_return=holdout_mean_net_return,
         profit_factor=profit_factor,
         profitable_folds=profitable_folds,
-        evidence_gate_passed=bool(base_gate and stability.stability_gate_passed),
+        evidence_gate_passed=bool(base_gate),
+        annual_stability_passed=bool(stability.stability_gate_passed),
     )
