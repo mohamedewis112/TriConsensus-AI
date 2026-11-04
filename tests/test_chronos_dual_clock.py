@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -14,7 +14,6 @@ from triconsensus.chronos_learning import (
     ChronosTransition,
     ProbabilisticTransitionEnsemble,
 )
-from triconsensus.v7_signal_lab import V7Candidate
 
 
 def _data(n: int = 420) -> list[ChronosTransition]:
@@ -56,14 +55,20 @@ def _data(n: int = 420) -> list[ChronosTransition]:
     return rows
 
 
+@dataclass(frozen=True)
+class _SlowCandidate:
+    species: str
+    side: str
+    confidence: float
+    regime_key: str
+
+
 def _validated_long() -> SlowAlphaEvidence:
-    candidate = V7Candidate(
+    candidate = _SlowCandidate(
         species="trend_breakout",
         side="LONG",
         confidence=0.72,
-        reason="test",
         regime_key="trend_up|mid_vol|momentum_up",
-        research_mode="historical_research_only",
     )
     return SlowAlphaEvidence.from_v7(
         candidate,
