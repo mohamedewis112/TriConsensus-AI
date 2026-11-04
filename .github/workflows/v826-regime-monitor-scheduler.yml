@@ -51,13 +51,17 @@ jobs:
           if [ -f artifacts/chronos-v826-regime-gated-ab.json ]; then
             cp artifacts/chronos-v826-regime-gated-ab.json artifacts/v826-history/current.json
           fi
-          gh api --paginate             "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=chronos-v826-regime-monitor&per_page=100"             --jq '.artifacts[] | select(.expired == false) | .id'             | head -100             | while read -r artifact_id; do
-                [ -z "$artifact_id" ] && continue
-                zip_path="/tmp/v826-${artifact_id}.zip"
-                if gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path"; then
-                  mkdir -p "artifacts/v826-history/${artifact_id}"
-                  unzip -oq "$zip_path" -d "artifacts/v826-history/${artifact_id}" || true
-                fi
+          gh run list \
+            --workflow "V8.26 Regime Monitor Scheduler" \
+            --limit 100 \
+            --json databaseId,conclusion \
+            --jq '.[] | select(.conclusion == "success") | .databaseId' \
+            | while read -r run_id; do
+                [ -z "$run_id" ] && continue
+                mkdir -p "artifacts/v826-history/${run_id}"
+                gh run download "$run_id" \
+                  --name chronos-v826-regime-monitor \
+                  --dir "artifacts/v826-history/${run_id}" || true
               done
 
       - name: Build V8.27 independent match ledger
@@ -65,7 +69,9 @@ jobs:
         env:
           PYTHONPATH: backend
         run: |
-          python -m triconsensus.chronos_match_ledger             --input-dir artifacts/v826-history             --output artifacts/chronos-v827-match-ledger.json
+          python -m triconsensus.chronos_match_ledger \
+            --input-dir artifacts/v826-history \
+            --output artifacts/chronos-v827-match-ledger.json
 
       - name: Upload regime monitor and evidence ledger
         uses: actions/upload-artifact@v4
@@ -76,5 +82,5 @@ jobs:
             artifacts/chronos-v826-regime-gated-ab.json
             artifacts/chronos-v827-match-ledger.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 90
 
