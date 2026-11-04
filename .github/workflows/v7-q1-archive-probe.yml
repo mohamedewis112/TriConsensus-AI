@@ -1,0 +1,29 @@
+name: V7 Q1 Archive Source Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v7-q1-archive-probe.txt"
+      - "backend/triconsensus/q1_archive_probe.py"
+      - ".github/workflows/v7-q1-archive-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  q1-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install probe dependency
+        run: pip install "httpx>=0.28,<1"
+      - name: Probe Q1 monthly and daily Bybit archives
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.q1_archive_probe
