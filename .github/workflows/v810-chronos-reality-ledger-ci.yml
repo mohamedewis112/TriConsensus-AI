@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_reality_ledger.py"
       - "tests/test_chronos_reality_ledger.py"
       - ".github/workflows/v810-chronos-reality-ledger-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_reality_ledger.py"
-      - "tests/test_chronos_reality_ledger.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   reality-ledger:

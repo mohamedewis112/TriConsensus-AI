@@ -16,20 +16,9 @@ on:
       - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
       - "tests/test_v6_*.py"
       - ".github/workflows/v6-marl-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/v6_*.py"
-      - "backend/requirements-marl.txt"
-      - "backend/requirements-v6-collector.txt"
-      - "deploy/v6-shadow-collector.Dockerfile"
-      - ".railway/railway.ts"
-      - "supabase/functions/v6-shadow-observer/**"
-      - "supabase/migrations/*v6_shadow_observer.sql"
-      - "supabase/migrations/*v6_parallel_shadow_learning.sql"
-      - "supabase/migrations/*v6_adaptive_regime_safe_prior_v2.sql"
-      - "tests/test_v6_*.py"
-      - ".github/workflows/v6-marl-ci.yml"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   mappo-cpu-tests:

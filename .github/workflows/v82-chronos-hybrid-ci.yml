@@ -8,11 +8,9 @@ on:
       - "backend/triconsensus/chronos_hybrid_smoke.py"
       - "tests/test_chronos_hybrid.py"
       - ".github/workflows/v82-chronos-hybrid-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_hybrid.py"
-      - "tests/test_chronos_hybrid.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   hybrid-artificial-market:

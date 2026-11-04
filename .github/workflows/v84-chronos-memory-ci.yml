@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_memory.py"
       - "tests/test_chronos_memory.py"
       - ".github/workflows/v84-chronos-memory-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_memory.py"
-      - "tests/test_chronos_memory.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   market-memory:

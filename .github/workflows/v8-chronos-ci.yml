@@ -8,11 +8,9 @@ on:
       - "tests/test_chronos.py"
       - "docs/CHRONOS_V8.md"
       - ".github/workflows/v8-chronos-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos.py"
-      - "tests/test_chronos.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   chronos-research-safety:

@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_immune.py"
       - "tests/test_chronos_immune.py"
       - ".github/workflows/v85-chronos-immune-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_immune.py"
-      - "tests/test_chronos_immune.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   alpha-immune:

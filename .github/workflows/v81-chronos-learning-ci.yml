@@ -8,11 +8,9 @@ on:
       - "backend/triconsensus/chronos_learning_smoke.py"
       - "tests/test_chronos_learning.py"
       - ".github/workflows/v81-chronos-learning-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_learning.py"
-      - "tests/test_chronos_learning.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   learned-world-model:

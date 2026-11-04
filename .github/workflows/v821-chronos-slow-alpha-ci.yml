@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_slow_alpha.py"
       - "tests/test_chronos_slow_alpha.py"
       - ".github/workflows/v821-chronos-slow-alpha-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_slow_alpha.py"
-      - "tests/test_chronos_slow_alpha.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   slow-alpha-stability:

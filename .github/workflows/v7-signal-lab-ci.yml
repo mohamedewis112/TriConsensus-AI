@@ -8,13 +8,9 @@ on:
       - "tests/test_v7_*.py"
       - "research/v7/**"
       - ".github/workflows/v7-signal-lab-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/v7_*.py"
-      - "tests/test_v7_*.py"
-      - "research/v7/**"
-      - ".github/workflows/v7-signal-lab-ci.yml"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   v7-research-contract:

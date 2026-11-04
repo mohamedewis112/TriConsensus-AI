@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_evidence_vault.py"
       - "tests/test_chronos_evidence_vault.py"
       - ".github/workflows/v818-chronos-evidence-vault-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_evidence_vault.py"
-      - "tests/test_chronos_evidence_vault.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   evidence-vault:

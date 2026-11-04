@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_ws_nervous_system.py"
       - "tests/test_chronos_ws_nervous_system.py"
       - ".github/workflows/v819-chronos-ws-nervous-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_ws_nervous_system.py"
-      - "tests/test_chronos_ws_nervous_system.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ws-nervous-system:

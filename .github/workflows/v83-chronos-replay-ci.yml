@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_replay.py"
       - "tests/test_chronos_replay.py"
       - ".github/workflows/v83-chronos-replay-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_replay.py"
-      - "tests/test_chronos_replay.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   real-replay-builder:

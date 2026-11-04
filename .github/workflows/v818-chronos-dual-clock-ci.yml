@@ -8,12 +8,9 @@ on:
       - "backend/triconsensus/chronos_learning.py"
       - "tests/test_chronos_dual_clock.py"
       - ".github/workflows/v818-chronos-dual-clock-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_dual_clock.py"
-      - "backend/triconsensus/chronos_learning.py"
-      - "tests/test_chronos_dual_clock.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   dual-clock:

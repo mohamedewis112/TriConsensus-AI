@@ -7,11 +7,9 @@ on:
       - "backend/triconsensus/chronos_os.py"
       - "tests/test_chronos_os.py"
       - ".github/workflows/v87-chronos-os-ci.yml"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "backend/triconsensus/chronos_os.py"
-      - "tests/test_chronos_os.py"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   research-os:
