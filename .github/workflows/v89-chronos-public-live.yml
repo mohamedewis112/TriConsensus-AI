@@ -9,6 +9,7 @@ on:
       - "backend/triconsensus/chronos_public_live.py"
       - "backend/triconsensus/chronos_learning.py"
       - "backend/triconsensus/chronos_hybrid.py"
+      - "backend/triconsensus/chronos_dual_clock.py"
       - ".github/workflows/v89-chronos-public-live.yml"
 
 permissions:
