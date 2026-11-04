@@ -16,7 +16,7 @@ from .chronos import (
 )
 
 
-CHRONOS_LEARNING_VERSION = "v8.1-chronos-learning-0"
+CHRONOS_LEARNING_VERSION = "v8.13-chronos-learning-integrity-0"
 FEATURE_NAMES = (
     "return_1m",
     "return_5m",
@@ -124,6 +124,13 @@ class LearningCalibrationReport:
     targets: tuple[TargetCalibration, ...]
     mean_interval_coverage: float
     calibrated: bool
+    next_return_directional_accuracy: float
+    next_return_directional_wilson_lower_95: float
+    next_return_correlation: float
+    next_return_actual_mean: float
+    next_return_predicted_mean: float
+    next_return_mean_sign_agreement: bool
+    predictive_skill: bool
 
 
 @dataclass(frozen=True)
@@ -257,6 +264,46 @@ class ProbabilisticTransitionEnsemble:
                 )
             )
         mean_coverage = float(np.mean([target.interval_coverage for target in targets]))
+
+        actual_return = y_eval[:, 0]
+        predicted_return = eval_mean[:, 0]
+        directional_hits = (predicted_return > 0.0) == (actual_return > 0.0)
+        directional_accuracy = float(np.mean(directional_hits))
+        hits = int(np.sum(directional_hits))
+        direction_n = len(directional_hits)
+        z95 = 1.959963984540054
+        phat = hits / direction_n
+        denominator = 1.0 + (z95 * z95) / direction_n
+        wilson_lower = (
+            phat
+            + (z95 * z95) / (2.0 * direction_n)
+            - z95
+            * math.sqrt(
+                (phat * (1.0 - phat)) / direction_n
+                + (z95 * z95) / (4.0 * direction_n * direction_n)
+            )
+        ) / denominator
+        return_correlation = 0.0
+        if (
+            direction_n >= 3
+            and float(np.std(actual_return)) > 1e-12
+            and float(np.std(predicted_return)) > 1e-12
+        ):
+            return_correlation = float(
+                np.corrcoef(actual_return, predicted_return)[0, 1]
+            )
+        actual_mean = float(np.mean(actual_return))
+        predicted_mean = float(np.mean(predicted_return))
+        mean_sign_agreement = bool(
+            np.sign(actual_mean) == np.sign(predicted_mean)
+            or (abs(actual_mean) < 1e-12 and abs(predicted_mean) < 1e-12)
+        )
+        predictive_skill = bool(
+            wilson_lower > 0.50
+            and return_correlation > 0.0
+            and mean_sign_agreement
+        )
+
         report = LearningCalibrationReport(
             train_rows=len(x_train),
             calibration_rows=len(x_cal),
@@ -264,6 +311,13 @@ class ProbabilisticTransitionEnsemble:
             targets=tuple(targets),
             mean_interval_coverage=mean_coverage,
             calibrated=0.72 <= mean_coverage <= 1.0,
+            next_return_directional_accuracy=directional_accuracy,
+            next_return_directional_wilson_lower_95=float(wilson_lower),
+            next_return_correlation=return_correlation,
+            next_return_actual_mean=actual_mean,
+            next_return_predicted_mean=predicted_mean,
+            next_return_mean_sign_agreement=mean_sign_agreement,
+            predictive_skill=predictive_skill,
         )
         self._sample_count = n
         self.calibration_report = report
@@ -412,6 +466,10 @@ class LearningSafetyGate:
     sample_count: int
     calibrated: bool
     mean_interval_coverage: float
+    next_return_directional_accuracy: float
+    next_return_directional_wilson_lower_95: float
+    next_return_correlation: float
+    predictive_skill: bool
     drift_detected: bool
     research_ready: bool
     reasons: tuple[str, ...]
@@ -431,11 +489,21 @@ def evaluate_learning_gate(
         reasons.append("model_not_fitted")
         coverage = 0.0
         calibrated = False
+        directional_accuracy = 0.0
+        directional_lower = 0.0
+        return_correlation = 0.0
+        predictive_skill = False
     else:
         coverage = report.mean_interval_coverage
         calibrated = report.calibrated
+        directional_accuracy = report.next_return_directional_accuracy
+        directional_lower = report.next_return_directional_wilson_lower_95
+        return_correlation = report.next_return_correlation
+        predictive_skill = report.predictive_skill
         if not calibrated:
             reasons.append("forecast_intervals_not_calibrated")
+        if not predictive_skill:
+            reasons.append("next_return_predictive_skill_not_proven")
     if sample_count < model.minimum_samples:
         reasons.append("insufficient_samples")
     if drift_detected:
@@ -447,6 +515,10 @@ def evaluate_learning_gate(
         sample_count=sample_count,
         calibrated=calibrated,
         mean_interval_coverage=coverage,
+        next_return_directional_accuracy=directional_accuracy,
+        next_return_directional_wilson_lower_95=directional_lower,
+        next_return_correlation=return_correlation,
+        predictive_skill=predictive_skill,
         drift_detected=drift_detected,
         research_ready=ready,
         reasons=tuple(reasons),
