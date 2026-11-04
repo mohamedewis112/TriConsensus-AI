@@ -103,29 +103,45 @@ async def main() -> None:
 
                 if sample % forecast_every_seconds != 0:
                     continue
-                report = systems[symbol].forecast(
+                system = systems[symbol]
+                gate_report = system.transition_model.calibration_report
+                learned_transition = system.transition_model.predict(state)
+                learned_future = system.learned_engine.simulate(
                     state,
-                    drift_detected=False,
+                    learned_transition,
                     universes=universes,
                     horizon_steps=horizon_seconds,
                     seed=2700 + sample,
                 )
-                if not report.trust.research_ready:
-                    continue
+                trusted = bool(gate_report and gate_report.predictive_skill and gate_report.calibrated)
                 receipt = ledgers[symbol].register(
                     symbol=symbol,
                     forecast_timestamp_ms=state.timestamp_ms,
                     horizon_ms=horizon_seconds * 1_000,
-                    model_version=report.version,
-                    world_mode=report.world_mode,
-                    candidate=report.research_candidate,
-                    positive_probability=report.future.positive_probability,
-                    negative_probability=report.future.negative_probability,
-                    median_return=report.future.median_return,
-                    p05_return=report.future.p05_return,
-                    p95_return=report.future.p95_return,
-                    future_diversity=report.future.future_diversity,
-                    input_snapshot=asdict(state),
+                    model_version=learned_transition.model_version,
+                    world_mode=(
+                        "learned_shadow_trusted"
+                        if trusted
+                        else "learned_shadow_untrusted"
+                    ),
+                    candidate=(
+                        "SHADOW_FORECAST_TRUSTED"
+                        if trusted
+                        else "SHADOW_FORECAST_UNTRUSTED"
+                    ),
+                    positive_probability=learned_future.positive_probability,
+                    negative_probability=learned_future.negative_probability,
+                    median_return=learned_future.median_return,
+                    p05_return=learned_future.p05_return,
+                    p95_return=learned_future.p95_return,
+                    future_diversity=learned_future.future_diversity,
+                    input_snapshot={
+                        **asdict(state),
+                        "learning_gate": {
+                            "calibrated": bool(gate_report.calibrated) if gate_report else False,
+                            "predictive_skill": bool(gate_report.predictive_skill) if gate_report else False,
+                        },
+                    },
                 )
                 pending[symbol][receipt.receipt_hash] = (receipt, state.mid_price)
             sample += 1
@@ -134,7 +150,7 @@ async def main() -> None:
                 await asyncio.sleep(delay)
 
     report = {
-        "version": "v8.11-fresh-forward-shadow-1",
+        "version": "v8.14-fresh-forward-shadow-all-forecasts-0",
         "generated_at": datetime.now(UTC).isoformat(),
         "source": "PUBLIC_LIVE_OKX_PERP_COINBASE_SPOT",
         "training_seconds": training_seconds,
