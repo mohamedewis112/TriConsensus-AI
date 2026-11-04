@@ -31,7 +31,39 @@ async def _get_json(client: httpx.AsyncClient, url: str, params: dict | None = N
     return response.json()
 
 
-async def _fetch_depth(client: httpx.AsyncClient, symbol: str) -> dict:
+def _notional_depth_metrics(
+    bids: list[list[str]],
+    asks: list[list[str]],
+    *,
+    base_units_per_size: float,
+) -> tuple[float, float, float, float]:
+    if not bids or not asks:
+        raise PublicLiveShadowFailure("empty orderbook side")
+    if base_units_per_size <= 0:
+        raise PublicLiveShadowFailure("invalid base_units_per_size")
+    bid_notional = sum(
+        float(price) * float(size) * base_units_per_size
+        for price, size, *_ in bids
+    )
+    ask_notional = sum(
+        float(price) * float(size) * base_units_per_size
+        for price, size, *_ in asks
+    )
+    total = bid_notional + ask_notional
+    imbalance = (bid_notional - ask_notional) / total if total > 0 else 0.0
+    best_bid = float(bids[0][0])
+    best_ask = float(asks[0][0])
+    mid = (best_bid + best_ask) / 2.0
+    spread_bps = ((best_ask - best_bid) / mid) * 10_000 if mid > 0 else 0.0
+    return bid_notional, ask_notional, imbalance, spread_bps
+
+
+async def _fetch_depth(
+    client: httpx.AsyncClient,
+    symbol: str,
+    *,
+    okx_contract_value_base: float,
+) -> dict:
     asset = symbol.removesuffix("USDT")
     okx_id = f"{asset}-USDT-SWAP"
     coinbase_id = f"{asset}-USD"
@@ -63,8 +95,16 @@ async def _fetch_depth(client: httpx.AsyncClient, symbol: str) -> dict:
     if not o_bids or not o_asks or not c_bids or not c_asks:
         raise PublicLiveShadowFailure("empty OKX/Coinbase orderbook side")
 
-    okx_metrics = depth_metrics(o_bids, o_asks)
-    coinbase_metrics = depth_metrics(c_bids, c_asks)
+    okx_metrics = _notional_depth_metrics(
+        o_bids,
+        o_asks,
+        base_units_per_size=okx_contract_value_base,
+    )
+    coinbase_metrics = _notional_depth_metrics(
+        c_bids,
+        c_asks,
+        base_units_per_size=1.0,
+    )
     okx_mid = (float(o_bids[0][0]) + float(o_asks[0][0])) / 2.0
     coinbase_mid = (float(c_bids[0][0]) + float(c_asks[0][0])) / 2.0
     return {
@@ -83,7 +123,7 @@ async def _fetch_depth(client: httpx.AsyncClient, symbol: str) -> dict:
 async def _fetch_context(client: httpx.AsyncClient, symbol: str) -> dict:
     asset = symbol.removesuffix("USDT")
     okx_id = f"{asset}-USDT-SWAP"
-    candles_body, funding_body, oi_body = await asyncio.gather(
+    candles_body, funding_body, oi_body, instrument_body = await asyncio.gather(
         _get_json(
             client,
             f"{OKX}/api/v5/market/candles",
@@ -99,11 +139,17 @@ async def _fetch_context(client: httpx.AsyncClient, symbol: str) -> dict:
             f"{OKX}/api/v5/public/open-interest",
             {"instType": "SWAP", "instId": okx_id},
         ),
+        _get_json(
+            client,
+            f"{OKX}/api/v5/public/instruments",
+            {"instType": "SWAP", "instId": okx_id},
+        ),
     )
     for name, body in (
         ("candles", candles_body),
         ("funding", funding_body),
         ("open_interest", oi_body),
+        ("instrument", instrument_body),
     ):
         if (
             not isinstance(body, dict)
@@ -125,9 +171,23 @@ async def _fetch_context(client: httpx.AsyncClient, symbol: str) -> dict:
     close_5m = float(closed[-5][4])
     funding_rate = float(funding_body["data"][0].get("fundingRate") or 0.0)
     open_interest = float(oi_body["data"][0].get("oi") or 0.0)
+    instrument = instrument_body["data"][0]
+    contract_type = str(instrument.get("ctType") or "")
+    contract_value_ccy = str(instrument.get("ctValCcy") or "")
+    contract_value = float(instrument.get("ctVal") or 0.0)
+    if contract_type != "linear":
+        raise PublicLiveShadowFailure(
+            f"unsupported OKX contract type for {okx_id}: {contract_type}"
+        )
+    if contract_value_ccy != asset or contract_value <= 0:
+        raise PublicLiveShadowFailure(
+            f"ambiguous OKX contract value for {okx_id}: "
+            f"ctVal={contract_value} ctValCcy={contract_value_ccy}"
+        )
     return {
         "funding_rate": funding_rate,
         "open_interest": open_interest,
+        "okx_contract_value_base": contract_value,
         "close_1m": close_1m,
         "close_5m": close_5m,
         "captured_ms": int(time.time() * 1000),
@@ -161,7 +221,11 @@ class PublicLiveShadowCollector:
         if context is None:
             raise PublicLiveShadowFailure("missing public market context")
 
-        depth = await _fetch_depth(client, symbol)
+        depth = await _fetch_depth(
+            client,
+            symbol,
+            okx_contract_value_base=float(context["okx_contract_value_base"]),
+        )
         okx_bid, okx_ask, okx_imb, okx_spread = depth["okx"]
         cb_bid, cb_ask, cb_imb, cb_spread = depth["coinbase"]
         mid = float(depth["okx_mid"])
