@@ -323,38 +323,34 @@ class BybitKlineArchiveClient:
             if start_ms <= int(row["start_ms"]) < end_ms
         }
 
-        missing_months: list[tuple[int, int]] = []
-        for month_rows, missing in monthly_results:
-            if missing is not None:
-                missing_months.append(missing)
-                continue
+        for month_rows, _missing in monthly_results:
             for candle in month_rows:
                 timestamp = int(candle["start_ms"])
                 if start_ms <= timestamp < end_ms:
                     candles_by_start[timestamp] = candle
 
+        # A monthly archive can return HTTP 200 yet still be incomplete/truncated.
+        # Do not equate "monthly file exists" with "month is covered". Verify every
+        # requested UTC day has all 96 expected 15-minute starts, and use the raw
+        # daily trading archive for any incomplete day.
         fallback_days: list[date] = []
-        for year, month in missing_months:
-            month_first = date(year, month, 1)
-            month_last = date(year, month, calendar.monthrange(year, month)[1])
-            cursor_day = max(first_day, month_first)
-            final_missing_day = min(final_day, month_last)
-            while cursor_day <= final_missing_day:
-                day_start_ms = int(
-                    datetime.combine(
-                        cursor_day,
-                        datetime.min.time(),
-                        tzinfo=UTC,
-                    ).timestamp()
-                    * 1000
-                )
-                expected = {
-                    day_start_ms + offset * 15 * 60 * 1000
-                    for offset in range(96)
-                }
-                if not expected.issubset(candles_by_start):
-                    fallback_days.append(cursor_day)
-                cursor_day += timedelta(days=1)
+        cursor_day = first_day
+        while cursor_day <= final_day:
+            day_start_ms = int(
+                datetime.combine(
+                    cursor_day,
+                    datetime.min.time(),
+                    tzinfo=UTC,
+                ).timestamp()
+                * 1000
+            )
+            expected = {
+                day_start_ms + offset * 15 * 60 * 1000
+                for offset in range(96)
+            }
+            if not expected.issubset(candles_by_start):
+                fallback_days.append(cursor_day)
+            cursor_day += timedelta(days=1)
 
         if fallback_days:
             daily_semaphore = asyncio.Semaphore(4)
