@@ -12,6 +12,7 @@ import numpy as np
 
 from .chronos import MarketState
 from .chronos_hybrid import ChronosArtificialMarketCivilization
+from .chronos_dual_clock import head_specific_trust
 from .chronos_learning import transitions_from_states
 from .chronos_memory import MarketMemoryIndex
 from .v6_microstructure import depth_metrics
@@ -426,7 +427,7 @@ async def main() -> None:
     collector = PublicLiveShadowCollector()
     await collector.collect(seconds=220, interval_seconds=1.0)
     report = {
-        "version": "v8.9-public-live-shadow-1",
+        "version": "v8.19-fast-head-live-shadow-0",
         "captured_at": datetime.now(UTC).isoformat(),
         "source": "PUBLIC_LIVE_OKX_L2_COINBASE_SPOT_REFERENCE",
         "research_only": True,
