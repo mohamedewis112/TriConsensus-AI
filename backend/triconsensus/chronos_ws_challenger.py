@@ -240,9 +240,9 @@ class WsFastExecutionModel:
                 correlation = float(np.corrcoef(y_eval[:, j], pred[:, j])[0, 1])
             qualified = bool(
                 len(y_eval) >= 40
-                and relative_skill > 0.0
+                and relative_skill >= 0.05
                 and coverage >= 0.72
-                and correlation > 0.0
+                and correlation >= 0.10
             )
             metrics.append(
                 WsTargetMetrics(
@@ -259,12 +259,12 @@ class WsFastExecutionModel:
 
         by_target = {metric.target: metric for metric in metrics}
         flow_ok = by_target["future_trade_imbalance_1s"].qualified
-        spread_ok = by_target["future_spread_bps"].qualified
+        microprice_ok = by_target["future_microprice_offset_bps"].qualified
         reasons: list[str] = []
         if not flow_ok:
-            reasons.append("trade_flow_head_not_better_than_persistence")
-        if not spread_ok:
-            reasons.append("spread_head_not_better_than_persistence")
+            reasons.append("trade_flow_head_not_materially_better_than_persistence")
+        if not microprice_ok:
+            reasons.append("microprice_head_not_materially_better_than_persistence")
         return WsChallengerReport(
             version=CHRONOS_WS_CHALLENGER_VERSION,
             symbol=symbol,
@@ -272,7 +272,10 @@ class WsFastExecutionModel:
             supervised_rows=len(ordered),
             horizon_ms=horizon_ms,
             targets=tuple(metrics),
-            fast_execution_evidence_qualified=(flow_ok and spread_ok),
+            # Spread is a risk diagnostic, not a required forecast head. On tight
+            # books its persistence baseline can be nearly perfect, making
+            # "beat spread persistence" structurally meaningless.
+            fast_execution_evidence_qualified=(flow_ok and microprice_ok),
             reasons=tuple(reasons),
         )
 
