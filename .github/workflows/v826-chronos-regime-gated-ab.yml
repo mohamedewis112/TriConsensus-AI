@@ -2,8 +2,6 @@ name: V8.26 CHRONOS Regime-Gated ETH Timing A-B
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "2,17,32,47 * * * *"
   push:
     branches: ["feat/v1-foundation"]
     paths:
@@ -11,6 +9,10 @@ on:
       - "backend/triconsensus/chronos_regime_gated_ab.py"
       - "tests/test_chronos_regime_gated_ab.py"
       - ".github/workflows/v826-chronos-regime-gated-ab.yml"
+
+concurrency:
+  group: v826-regime-gated-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
