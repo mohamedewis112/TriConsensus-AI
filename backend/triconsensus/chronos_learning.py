@@ -112,6 +112,8 @@ def transitions_from_states(states: Sequence[MarketState]) -> list[ChronosTransi
 class TargetCalibration:
     target: str
     rmse: float
+    baseline_rmse: float
+    relative_skill: float
     interval_coverage: float
     conformal_radius: float
 
@@ -251,9 +253,23 @@ class ProbabilisticTransitionEnsemble:
         eval_heads = self._head_predictions(x_eval)
         eval_mean = eval_heads.mean(axis=0)
         eval_error = y_eval - eval_mean
+        baseline_predictions = (
+            np.zeros(len(x_eval), dtype=float),
+            x_eval[:, FEATURE_NAMES.index("order_flow_imbalance")],
+            np.zeros(len(x_eval), dtype=float),
+        )
         targets: list[TargetCalibration] = []
         for j, target in enumerate(TARGET_NAMES):
             rmse = float(np.sqrt(np.mean(eval_error[:, j] ** 2)))
+            baseline_error = y_eval[:, j] - baseline_predictions[j]
+            baseline_rmse = float(
+                np.sqrt(np.mean(baseline_error ** 2))
+            )
+            relative_skill = (
+                1.0 - (rmse / baseline_rmse)
+                if baseline_rmse > 1e-12
+                else 0.0
+            )
             low = eval_mean[:, j] - self._radii[j]
             high = eval_mean[:, j] + self._radii[j]
             coverage = float(np.mean((y_eval[:, j] >= low) & (y_eval[:, j] <= high)))
@@ -261,6 +277,8 @@ class ProbabilisticTransitionEnsemble:
                 TargetCalibration(
                     target=target,
                     rmse=rmse,
+                    baseline_rmse=baseline_rmse,
+                    relative_skill=float(relative_skill),
                     interval_coverage=coverage,
                     conformal_radius=float(self._radii[j]),
                 )
@@ -319,11 +337,17 @@ class ProbabilisticTransitionEnsemble:
             direction_n > 0
             and np.sign(actual_mean) == np.sign(predicted_mean)
         )
+        return_target_skill = next(
+            target.relative_skill
+            for target in targets
+            if target.target == "next_return"
+        )
         predictive_skill = bool(
             direction_n >= 20
             and wilson_lower > 0.50
             and return_correlation > 0.0
             and mean_sign_agreement
+            and return_target_skill > 0.0
         )
 
         report = LearningCalibrationReport(
