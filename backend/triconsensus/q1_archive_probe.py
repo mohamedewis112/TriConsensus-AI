@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import calendar
-from datetime import date
+from datetime import UTC, date, datetime
 import json
 
 import httpx
@@ -10,6 +10,7 @@ import httpx
 
 MONTHLY_BASE = "https://public.bybit.com/kline_for_metatrader4"
 DAILY_BASE = "https://public.bybit.com/trading"
+BYBIT_V5 = "https://api.bytick.com"
 
 
 def monthly_url(symbol: str, year: int, month: int) -> str:
@@ -47,10 +48,53 @@ async def probe_url(client: httpx.AsyncClient, url: str) -> dict:
         }
 
 
+
+async def probe_v5_15m(
+    client: httpx.AsyncClient,
+    symbol: str,
+    *,
+    start_day: date,
+    end_day: date,
+) -> dict:
+    start_ms = int(datetime.combine(start_day, datetime.min.time(), tzinfo=UTC).timestamp() * 1000)
+    end_ms = int(datetime.combine(end_day, datetime.max.time(), tzinfo=UTC).timestamp() * 1000)
+    try:
+        response = await client.get(
+            f"{BYBIT_V5}/v5/market/kline",
+            params={
+                "category": "linear",
+                "symbol": symbol,
+                "interval": "15",
+                "start": start_ms,
+                "end": end_ms,
+                "limit": 1000,
+            },
+        )
+        response.raise_for_status()
+        body = response.json()
+        rows = (body.get("result") or {}).get("list") or []
+        starts = sorted(int(row[0]) for row in rows if row)
+        return {
+            "http_status": response.status_code,
+            "retCode": body.get("retCode"),
+            "retMsg": body.get("retMsg"),
+            "rows": len(rows),
+            "oldest_start_ms": starts[0] if starts else None,
+            "newest_start_ms": starts[-1] if starts else None,
+            "url": str(response.url),
+        }
+    except Exception as exc:
+        return {
+            "http_status": None,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+
+
 async def main() -> None:
     timeout = httpx.Timeout(30.0, connect=10.0)
     headers = {"User-Agent": "TriConsensus-AI/Q1-archive-probe"}
-    report: dict[str, object] = {"monthly": {}, "daily_samples": {}}
+    report: dict[str, object] = {"monthly": {}, "daily_samples": {}, "v5_15m": {}}
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
@@ -74,6 +118,21 @@ async def main() -> None:
             ):
                 daily[day.isoformat()] = await probe_url(client, daily_url(symbol, day))
             report["daily_samples"][symbol] = daily
+
+            report["v5_15m"][symbol] = {
+                "2025-12": await probe_v5_15m(
+                    client,
+                    symbol,
+                    start_day=date(2025, 12, 1),
+                    end_day=date(2025, 12, 31),
+                ),
+                "2026-01": await probe_v5_15m(
+                    client,
+                    symbol,
+                    start_day=date(2026, 1, 1),
+                    end_day=date(2026, 1, 19),
+                ),
+            }
 
     print(json.dumps(report, indent=2, sort_keys=True))
 
