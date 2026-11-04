@@ -152,7 +152,7 @@ async def main() -> None:
     report = {
         "version": "v8.15-fresh-forward-qualifiable-window-0",
         "generated_at": datetime.now(UTC).isoformat(),
-        "source": "PUBLIC_LIVE_OKX_PERP_COINBASE_SPOT",
+        "source": "PUBLIC_LIVE_OKX_L2_COINBASE_SPOT_REFERENCE",
         "training_seconds": training_seconds,
         "forward_seconds": forward_seconds,
         "forecast_every_seconds": forecast_every_seconds,

@@ -67,7 +67,7 @@ async def _fetch_depth(
     asset = symbol.removesuffix("USDT")
     okx_id = f"{asset}-USDT-SWAP"
     coinbase_id = f"{asset}-USD"
-    okx_body, coinbase_body = await asyncio.gather(
+    okx_body, coinbase_ticker = await asyncio.gather(
         _get_json(
             client,
             f"{OKX}/api/v5/market/books",
@@ -75,8 +75,7 @@ async def _fetch_depth(
         ),
         _get_json(
             client,
-            f"{COINBASE}/products/{coinbase_id}/book",
-            {"level": 2},
+            f"{COINBASE}/products/{coinbase_id}/ticker",
         ),
     )
     if (
@@ -90,26 +89,20 @@ async def _fetch_depth(
     okx_book = okx_body["data"][0]
     o_bids = (okx_book.get("bids") or [])[:20]
     o_asks = (okx_book.get("asks") or [])[:20]
-    c_bids = (coinbase_body.get("bids") or [])[:20]
-    c_asks = (coinbase_body.get("asks") or [])[:20]
-    if not o_bids or not o_asks or not c_bids or not c_asks:
-        raise PublicLiveShadowFailure("empty OKX/Coinbase orderbook side")
+    if not o_bids or not o_asks:
+        raise PublicLiveShadowFailure("empty OKX orderbook side")
+    if not isinstance(coinbase_ticker, dict) or not coinbase_ticker.get("price"):
+        raise PublicLiveShadowFailure("invalid Coinbase spot ticker")
 
     okx_metrics = _notional_depth_metrics(
         o_bids,
         o_asks,
         base_units_per_size=okx_contract_value_base,
     )
-    coinbase_metrics = _notional_depth_metrics(
-        c_bids,
-        c_asks,
-        base_units_per_size=1.0,
-    )
     okx_mid = (float(o_bids[0][0]) + float(o_asks[0][0])) / 2.0
-    coinbase_mid = (float(c_bids[0][0]) + float(c_asks[0][0])) / 2.0
+    coinbase_mid = float(coinbase_ticker["price"])
     return {
         "okx": okx_metrics,
-        "coinbase": coinbase_metrics,
         "okx_mid": okx_mid,
         "coinbase_mid": coinbase_mid,
         "basis_bps": (
@@ -227,7 +220,6 @@ class PublicLiveShadowCollector:
             okx_contract_value_base=float(context["okx_contract_value_base"]),
         )
         okx_bid, okx_ask, okx_imb, okx_spread = depth["okx"]
-        cb_bid, cb_ask, cb_imb, cb_spread = depth["coinbase"]
         mid = float(depth["okx_mid"])
 
         mids = self.mid_history[symbol]
@@ -244,17 +236,13 @@ class PublicLiveShadowCollector:
         else:
             realized = abs(micro_return)
 
-        okx_total = okx_bid + okx_ask
-        cb_total = cb_bid + cb_ask
-        total_depth = max(okx_total + cb_total, 1e-9)
-        bid_depth = float(okx_bid + cb_bid)
-        ask_depth = float(okx_ask + cb_ask)
-        weighted_imbalance = float(
-            (okx_imb * okx_total + cb_imb * cb_total) / total_depth
-        )
-        weighted_spread = float(
-            (okx_spread * okx_total + cb_spread * cb_total) / total_depth
-        )
+        # Use one homogeneous L2 venue for depth/order-flow. Coinbase is a
+        # lightweight spot reference for basis only; mixing unlike depth books
+        # would create a unit/coverage artifact.
+        bid_depth = float(okx_bid)
+        ask_depth = float(okx_ask)
+        weighted_imbalance = float(okx_imb)
+        weighted_spread = float(okx_spread)
 
         oi = float(context["open_interest"])
         prior_oi = self.last_open_interest.get(symbol, oi)
@@ -438,7 +426,7 @@ async def main() -> None:
     report = {
         "version": "v8.9-public-live-shadow-1",
         "captured_at": datetime.now(UTC).isoformat(),
-        "source": "PUBLIC_LIVE_OKX_PERP_COINBASE_SPOT",
+        "source": "PUBLIC_LIVE_OKX_L2_COINBASE_SPOT_REFERENCE",
         "research_only": True,
         "paper_trading_authority": False,
         "live_trading_authority": False,
