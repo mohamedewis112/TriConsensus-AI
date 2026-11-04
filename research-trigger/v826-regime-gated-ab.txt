@@ -1,1 +1,1 @@
-trigger v8.26 exact regime-gated ETH timing A-B
+manual v8.26 regime-gated ETH check 2026-11-04T13:00+02:00
