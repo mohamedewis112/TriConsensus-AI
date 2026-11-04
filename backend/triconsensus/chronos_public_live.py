@@ -359,6 +359,7 @@ def analyze_symbol(
     calibration = civilization.transition_model.calibration_report
     if calibration is None:
         raise PublicLiveShadowFailure("missing learning calibration")
+    fast_trust = head_specific_trust(calibration)
 
     memory = MarketMemoryIndex(
         minimum_neighbors=10,
@@ -403,6 +404,7 @@ def analyze_symbol(
             transitions,
             calibration.evaluation_rows,
         ),
+        "fast_head_trust": asdict(fast_trust),
         "market_memory": {
             "usable": recall.usable,
             "neighbors": recall.neighbor_count,
