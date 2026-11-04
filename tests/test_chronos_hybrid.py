@@ -100,3 +100,19 @@ def test_learned_multiverse_is_probabilistic_not_single_path():
     assert report.future.p05_return < report.future.p95_return
     assert 0.0 <= report.future.future_diversity <= 1.0
     assert report.future.effective_scenarios > 1.0
+
+
+
+def test_research_candidate_must_clear_round_trip_cost():
+    data = _data()
+    system = ChronosArtificialMarketCivilization(round_trip_cost=0.50)
+    system.fit(data)
+    report = system.forecast(
+        data[-1].state,
+        drift_detected=False,
+        universes=1200,
+        horizon_steps=8,
+        seed=404,
+    )
+    assert report.trust.research_ready is True
+    assert report.research_candidate == "NO_RESEARCH_EDGE"
