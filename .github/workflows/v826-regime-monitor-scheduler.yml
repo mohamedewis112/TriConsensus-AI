@@ -2,7 +2,7 @@ name: V8.26 Regime Monitor Scheduler
 
 on:
   schedule:
-    - cron: "2,17,32,47 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
   push:
     branches: ["main"]
@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: v826-regime-monitor
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   monitor:
@@ -50,4 +50,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-# manual-check: 2026-11-04T18:10+02:00
