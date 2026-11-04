@@ -49,3 +49,5 @@ jobs:
           path: artifacts/chronos-v826-regime-gated-ab.json
           if-no-files-found: ignore
           retention-days: 14
+
+# manual-check: 2026-11-04T18:10+02:00
