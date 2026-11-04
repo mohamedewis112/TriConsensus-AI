@@ -13,6 +13,7 @@ from .chronos_hybrid import ChronosArtificialMarketCivilization
 from .chronos_learning import transitions_from_states
 from .chronos_public_live import PublicLiveShadowCollector
 from .chronos_reality_ledger import ForecastReceipt, RealityLedger
+from .chronos_forward_evidence import audit_reality_ledger
 
 
 class FreshForwardFailure(RuntimeError):
@@ -133,9 +134,9 @@ async def main() -> None:
                 await asyncio.sleep(delay)
 
     report = {
-        "version": "v8.11-fresh-forward-shadow-0",
+        "version": "v8.11-fresh-forward-shadow-1",
         "generated_at": datetime.now(UTC).isoformat(),
-        "source": "PUBLIC_LIVE_BYBIT_BINANCE",
+        "source": "PUBLIC_LIVE_OKX_PERP_COINBASE_SPOT",
         "training_seconds": training_seconds,
         "forward_seconds": forward_seconds,
         "forecast_every_seconds": forecast_every_seconds,
@@ -162,6 +163,7 @@ async def main() -> None:
                 "still_pending": len(pending[symbol]),
                 "hash_chain_valid": ledger.verify_chain(),
                 "fresh_forward_calibration": asdict(summary) if summary else None,
+                "forward_evidence_audit": asdict(audit_reality_ledger(ledger)) if ledger.resolutions else None,
             }
         )
 
