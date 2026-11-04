@@ -100,3 +100,78 @@ def test_hybrid_archive_can_fall_back_for_missing_partial_month():
         )
     )
     assert len(rows) == 7 * 96
+
+
+
+def test_hybrid_archive_falls_back_when_existing_month_is_incomplete():
+    import asyncio
+
+    class FakeDaily:
+        def __init__(self):
+            self.days = []
+
+        async def daily_15m(self, symbol, day):
+            self.days.append(day)
+            rows = []
+            for q in range(96):
+                ts = datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    q // 4,
+                    (q % 4) * 15,
+                    tzinfo=UTC,
+                )
+                rows.append(
+                    {
+                        "start_ms": int(ts.timestamp() * 1000),
+                        "open": 100,
+                        "high": 101,
+                        "low": 99,
+                        "close": 100,
+                        "volume": 1,
+                        "turnover": 100,
+                    }
+                )
+            return rows
+
+    class FakeIncompleteMonthly(BybitKlineArchiveClient):
+        async def monthly_15m(self, symbol, year, month):
+            # HTTP-200 equivalent: the monthly file exists but contains only
+            # the first requested day, reproducing the real 2025-11 failure mode.
+            day = date(2026, 10, 1)
+            rows = []
+            for q in range(96):
+                ts = datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    q // 4,
+                    (q % 4) * 15,
+                    tzinfo=UTC,
+                )
+                rows.append(
+                    {
+                        "start_ms": int(ts.timestamp() * 1000),
+                        "open": 100,
+                        "high": 101,
+                        "low": 99,
+                        "close": 100,
+                        "volume": 1,
+                        "turnover": 100,
+                    }
+                )
+            return rows
+
+    daily = FakeDaily()
+    client = FakeIncompleteMonthly(fallback=daily)
+    rows = asyncio.run(
+        client.historical_15m(
+            "BTCUSDT",
+            days=7,
+            end_day=date(2026, 10, 7),
+        )
+    )
+    assert len(rows) == 7 * 96
+    assert len(daily.days) == 6
+    assert date(2026, 10, 1) not in daily.days
