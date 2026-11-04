@@ -35,3 +35,7 @@ def test_public_live_analysis_stays_research_only():
     assert report["paper_trading_authority"] is False
     assert report["live_trading_authority"] is False
     assert 0.0 <= report["untouched_evaluation"]["directional_accuracy"] <= 1.0
+    assert "fast_head_trust" in report
+    assert report["fast_head_trust"]["research_only"] is True
+    assert report["fast_head_trust"]["price_head_trusted"] in {True, False}
+    assert report["fast_head_trust"]["fast_execution_trusted"] in {True, False}
