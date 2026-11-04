@@ -195,7 +195,7 @@ async def collect_public_ws_probe(seconds: float = 8.0) -> dict:
     async with websockets.connect(
         OKX_PUBLIC_WS,ping_interval=15,ping_timeout=15,max_size=4*1024*1024,open_timeout=8
     ) as ws:
-        await ws.send(json.dumps({"id":"chronos-v819","op":"subscribe","args":args}))
+        await ws.send(json.dumps({"id":"chronosv819","op":"subscribe","args":args}))
         while time.monotonic()<deadline:
             remaining=max(0.1,deadline-time.monotonic())
             try:
