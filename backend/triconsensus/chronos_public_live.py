@@ -387,6 +387,8 @@ def analyze_symbol(
             "mean_interval_coverage": calibration.mean_interval_coverage,
             "calibrated": calibration.calibrated,
             "predictive_skill": calibration.predictive_skill,
+            "next_return_direction_deadzone": calibration.next_return_direction_deadzone,
+            "next_return_directional_sample_count": calibration.next_return_directional_sample_count,
             "next_return_directional_accuracy": calibration.next_return_directional_accuracy,
             "next_return_directional_wilson_lower_95": calibration.next_return_directional_wilson_lower_95,
             "next_return_correlation": calibration.next_return_correlation,
