@@ -398,6 +398,13 @@ def analyze_symbol(
             "evaluation_rows": calibration.evaluation_rows,
             "mean_interval_coverage": calibration.mean_interval_coverage,
             "calibrated": calibration.calibrated,
+            "predictive_skill": calibration.predictive_skill,
+            "next_return_directional_accuracy": calibration.next_return_directional_accuracy,
+            "next_return_directional_wilson_lower_95": calibration.next_return_directional_wilson_lower_95,
+            "next_return_correlation": calibration.next_return_correlation,
+            "next_return_actual_mean": calibration.next_return_actual_mean,
+            "next_return_predicted_mean": calibration.next_return_predicted_mean,
+            "next_return_mean_sign_agreement": calibration.next_return_mean_sign_agreement,
             "targets": [asdict(row) for row in calibration.targets],
         },
         "untouched_evaluation": _eval_metrics(
