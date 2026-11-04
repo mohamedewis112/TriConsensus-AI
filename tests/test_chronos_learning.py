@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -88,6 +90,9 @@ def test_probabilistic_world_model_learns_synthetic_transition_and_calibrates():
     assert report.evaluation_rows >= 40
     assert report.calibrated is True
     assert report.mean_interval_coverage >= 0.72
+    assert report.predictive_skill is True
+    assert report.next_return_directional_wilson_lower_95 > 0.50
+    assert report.next_return_correlation > 0.0
 
     forecast = model.predict(data[-1].state)
     assert forecast.research_only is True
@@ -148,3 +153,26 @@ def test_model_refuses_tiny_sample():
     model = ProbabilisticTransitionEnsemble(minimum_samples=180)
     with pytest.raises(ValueError, match="insufficient CHRONOS learning sample"):
         model.fit(_dataset(100))
+
+
+
+def test_learning_gate_rejects_calibrated_but_anti_predictive_model():
+    model = ProbabilisticTransitionEnsemble(heads=5, minimum_samples=180)
+    model.fit(_dataset())
+    assert model.calibration_report is not None
+    model.calibration_report = replace(
+        model.calibration_report,
+        calibrated=True,
+        mean_interval_coverage=0.90,
+        next_return_directional_accuracy=0.15,
+        next_return_directional_wilson_lower_95=0.05,
+        next_return_correlation=0.10,
+        next_return_actual_mean=-0.001,
+        next_return_predicted_mean=0.001,
+        next_return_mean_sign_agreement=False,
+        predictive_skill=False,
+    )
+    gate = evaluate_learning_gate(model, drift_detected=False)
+    assert gate.research_ready is False
+    assert gate.predictive_skill is False
+    assert "next_return_predictive_skill_not_proven" in gate.reasons
