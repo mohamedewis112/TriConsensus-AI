@@ -7,6 +7,8 @@ on:
     paths:
       - "research-trigger/v89-public-live.txt"
       - "backend/triconsensus/chronos_public_live.py"
+      - "backend/triconsensus/chronos_learning.py"
+      - "backend/triconsensus/chronos_hybrid.py"
       - ".github/workflows/v89-chronos-public-live.yml"
 
 permissions:
