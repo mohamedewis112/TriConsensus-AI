@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .agents import AgentService
 from .config import settings
+from .chronos_runtime import run_chronos_runtime_cycle
 from .consensus import full_consensus
 from .cycle import PaperDecisionCycle, V6_PAPER_EXPERIMENT_VERSION
 from .db import PersistenceFailure, SupabaseRepository
@@ -185,6 +186,22 @@ def _require_cron_secret(request: Request) -> None:
     expected = f"Bearer {secret}"
     if not secret or not hmac.compare_digest(auth, expected):
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+@app.get("/v1/chronos/cron")
+async def chronos_research_cron(request: Request) -> dict:
+    _require_cron_secret(request)
+    if settings.trading_mode.value != "paper" or settings.v6_marl_enforcement_active:
+        raise HTTPException(
+            status_code=503,
+            detail="chronos research safety invariant failed",
+        )
+
+    oidc_token = request.headers.get("x-vercel-oidc-token")
+    return await run_chronos_runtime_cycle(
+        settings,
+        vercel_oidc_token=oidc_token,
+    )
 
 
 @app.get("/v1/runtime/cron")

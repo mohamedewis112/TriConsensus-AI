@@ -61,3 +61,9 @@ class PaperRuntimeGateway:
 
     async def monitor(self, payload: dict[str, Any]) -> dict:
         return await self._call("monitor", payload)
+
+    async def chronos_record(self, payload: dict[str, Any]) -> dict:
+        return await self._call("chronos_record", payload)
+
+    async def chronos_list(self) -> dict:
+        return await self._call("chronos_list")

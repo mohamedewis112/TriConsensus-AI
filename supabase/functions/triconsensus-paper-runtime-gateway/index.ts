@@ -72,6 +72,15 @@ Deno.serve(async (req: Request) => {
     }
     rpcName = "triconsensus_runtime_monitor_paper_trade";
     args = { p_token: INTERNAL_RPC_TOKEN, p_payload: body.payload };
+  } else if (body.action === "chronos_record") {
+    if (!body.payload || typeof body.payload !== "object") {
+      return Response.json({ error: "payload_required" }, { status: 400 });
+    }
+    rpcName = "triconsensus_chronos_record_episode";
+    args = { p_token: INTERNAL_RPC_TOKEN, p_payload: body.payload };
+  } else if (body.action === "chronos_list") {
+    rpcName = "triconsensus_chronos_list_episodes";
+    args = { p_token: INTERNAL_RPC_TOKEN };
   } else {
     return Response.json({ error: "invalid_action" }, { status: 400 });
   }
