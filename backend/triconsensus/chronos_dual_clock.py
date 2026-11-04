@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Mapping, Protocol
 
 from .chronos import MarketState
 from .chronos_learning import (
@@ -9,7 +9,11 @@ from .chronos_learning import (
     ProbabilisticTransitionEnsemble,
     TransitionForecast,
 )
-from .v7_signal_lab import V7Candidate
+class SlowCandidateLike(Protocol):
+    species: str
+    side: str
+    confidence: float
+    regime_key: str
 
 
 CHRONOS_DUAL_CLOCK_VERSION = "v8.18-dual-clock-0"
@@ -33,7 +37,7 @@ class SlowAlphaEvidence:
     @classmethod
     def from_v7(
         cls,
-        candidate: V7Candidate,
+        candidate: SlowCandidateLike,
         *,
         alpha_id: str,
         holdout_trades: int,
