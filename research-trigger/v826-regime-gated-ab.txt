@@ -1,1 +1,1 @@
-verify isolated v8.26 monitor after CI fan-out fix
+manual v8.26 current check 2026-11-04T23:03+02:00
