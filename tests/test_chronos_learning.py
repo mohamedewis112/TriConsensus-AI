@@ -176,3 +176,18 @@ def test_learning_gate_rejects_calibrated_but_anti_predictive_model():
     assert gate.research_ready is False
     assert gate.predictive_skill is False
     assert "next_return_predictive_skill_not_proven" in gate.reasons
+
+
+
+def test_flat_evaluation_moves_do_not_inflate_directional_skill():
+    data = _dataset()
+    evaluation_start = int(len(data) * 0.85)
+    flattened = list(data)
+    for i in range(evaluation_start, len(flattened)):
+        if (i - evaluation_start) % 3 != 0:
+            flattened[i] = replace(flattened[i], next_return=0.0)
+    model = ProbabilisticTransitionEnsemble(heads=5, minimum_samples=180, seed=91)
+    report = model.fit(flattened)
+    assert report.next_return_directional_sample_count < report.evaluation_rows
+    assert report.next_return_directional_sample_count < 20
+    assert report.predictive_skill is False
