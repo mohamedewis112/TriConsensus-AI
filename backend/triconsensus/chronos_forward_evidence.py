@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Sequence
 
 import numpy as np
@@ -8,7 +9,7 @@ import numpy as np
 from .chronos_reality_ledger import ForecastReceipt, OutcomeResolution, RealityLedger
 
 
-CHRONOS_FORWARD_EVIDENCE_VERSION = "v8.13-forward-evidence-auditor-0"
+CHRONOS_FORWARD_EVIDENCE_VERSION = "v8.17-forward-evidence-auditor-significance-0"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,11 @@ class ForwardEvidenceAudit:
     sample_size_qualified: bool
     beats_base_rate: bool
     brier_skill_qualified: bool
+    provisional_forward_signal: bool
+    non_overlapping_hits: int
+    exact_binomial_p_value: float
+    statistical_sample_qualified: bool
+    statistically_significant: bool
     evidence_qualified: bool
     reasons: tuple[str, ...]
     research_only: bool = True
@@ -43,6 +49,24 @@ def _base_rate_accuracy(actual_positive: np.ndarray) -> float:
         return 0.0
     p = float(np.mean(actual_positive))
     return max(p, 1.0 - p)
+
+def _one_sided_binomial_p_value(*, hits: int, trials: int, null_accuracy: float) -> float:
+    if trials <= 0:
+        return 1.0
+    p = min(1.0, max(0.0, float(null_accuracy)))
+    if hits <= 0:
+        return 1.0
+    if p <= 0.0:
+        return 0.0
+    if p >= 1.0:
+        return 1.0
+    return float(
+        sum(
+            math.comb(trials, k) * (p ** k) * ((1.0 - p) ** (trials - k))
+            for k in range(hits, trials + 1)
+        )
+    )
+
 
 
 def _non_overlapping_pairs(
@@ -68,6 +92,8 @@ def audit_reality_ledger(
     minimum_each_class: int = 5,
     minimum_non_overlapping: int = 8,
     minimum_excess_accuracy: float = 0.05,
+    minimum_statistical_non_overlapping: int = 20,
+    significance_level: float = 0.05,
 ) -> ForwardEvidenceAudit:
     resolutions = {r.receipt_hash: r for r in ledger.resolutions}
     pairs = [
@@ -122,6 +148,12 @@ def audit_reality_ledger(
         float(np.mean(non_overlap_hits)) if len(non_overlap_hits) else 0.0
     )
     non_overlap_base = _base_rate_accuracy(non_overlap_actual)
+    non_overlap_hit_count = int(np.sum(non_overlap_hits))
+    binomial_p_value = _one_sided_binomial_p_value(
+        hits=non_overlap_hit_count,
+        trials=len(non_overlap_hits),
+        null_accuracy=non_overlap_base,
+    )
 
     positive_count = int(np.sum(actual_positive))
     negative_count = len(actual_positive) - positive_count
@@ -132,18 +164,31 @@ def audit_reality_ledger(
     independence_ok = len(non_overlap) >= minimum_non_overlapping
     sample_ok = len(pairs) >= minimum_total_samples
     beats_base = excess >= minimum_excess_accuracy
+    statistical_sample_ok = len(non_overlap) >= minimum_statistical_non_overlapping
+    statistically_significant = (
+        statistical_sample_ok
+        and binomial_p_value < significance_level
+        and non_overlap_accuracy > non_overlap_base
+    )
 
-    reasons: list[str] = []
+    provisional_reasons: list[str] = []
     if not sample_ok:
-        reasons.append("insufficient_total_forward_samples")
+        provisional_reasons.append("insufficient_total_forward_samples")
     if not class_balance_ok:
-        reasons.append("one_sided_or_class_imbalanced_outcomes")
+        provisional_reasons.append("one_sided_or_class_imbalanced_outcomes")
     if not independence_ok:
-        reasons.append("insufficient_non_overlapping_horizons")
+        provisional_reasons.append("insufficient_non_overlapping_horizons")
     if not beats_base:
-        reasons.append("does_not_beat_empirical_base_rate")
+        provisional_reasons.append("does_not_beat_empirical_base_rate")
     if not brier_skill_qualified:
-        reasons.append("no_positive_brier_skill_vs_base_rate")
+        provisional_reasons.append("no_positive_brier_skill_vs_base_rate")
+
+    provisional = not provisional_reasons
+    reasons = list(provisional_reasons)
+    if not statistical_sample_ok:
+        reasons.append("insufficient_non_overlapping_samples_for_significance")
+    elif not statistically_significant:
+        reasons.append("directional_edge_not_statistically_significant_vs_base_rate")
 
     return ForwardEvidenceAudit(
         version=CHRONOS_FORWARD_EVIDENCE_VERSION,
@@ -164,6 +209,11 @@ def audit_reality_ledger(
         sample_size_qualified=sample_ok,
         beats_base_rate=beats_base,
         brier_skill_qualified=brier_skill_qualified,
-        evidence_qualified=not reasons,
+        provisional_forward_signal=provisional,
+        non_overlapping_hits=non_overlap_hit_count,
+        exact_binomial_p_value=binomial_p_value,
+        statistical_sample_qualified=statistical_sample_ok,
+        statistically_significant=statistically_significant,
+        evidence_qualified=(provisional and statistically_significant),
         reasons=tuple(reasons),
     )

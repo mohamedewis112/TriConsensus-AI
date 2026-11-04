@@ -79,3 +79,32 @@ def test_configured_forward_window_can_supply_minimum_non_overlapping_evidence()
     total_forecasts = 1 + (forward_seconds - 1) // forecast_every_seconds
     assert max_non_overlapping >= 8
     assert total_forecasts >= 20
+
+
+def test_eight_non_overlapping_horizons_are_only_provisional_not_final_evidence():
+    ledger = RealityLedger()
+    # 8 non-overlapping 30s horizons, all directionally correct and balanced.
+    probabilities = [0.8, 0.2, 0.8, 0.2, 0.8, 0.2, 0.8, 0.2]
+    receipts = []
+    for i, probability in enumerate(probabilities):
+        ts_index = i * 6
+        receipts.append(_receipt(ledger, ts_index, probability))
+    outcomes = [0.001, -0.001, 0.001, -0.001, 0.001, -0.001, 0.001, -0.001]
+    for receipt, outcome in zip(receipts, outcomes):
+        ledger.resolve(
+            receipt,
+            resolved_timestamp_ms=receipt.forecast_timestamp_ms + receipt.horizon_ms,
+            realized_return=outcome,
+        )
+    audit = audit_reality_ledger(
+        ledger,
+        minimum_total_samples=8,
+        minimum_each_class=2,
+        minimum_non_overlapping=8,
+        minimum_excess_accuracy=0.0,
+        minimum_statistical_non_overlapping=20,
+    )
+    assert audit.provisional_forward_signal is True
+    assert audit.statistical_sample_qualified is False
+    assert audit.evidence_qualified is False
+    assert "insufficient_non_overlapping_samples_for_significance" in audit.reasons
