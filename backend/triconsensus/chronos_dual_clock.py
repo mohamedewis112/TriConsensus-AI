@@ -32,6 +32,7 @@ class SlowAlphaEvidence:
     profit_factor: float
     profitable_folds: int
     evidence_gate_passed: bool
+    annual_stability_passed: bool = False
     research_only: bool = True
 
     @classmethod
@@ -45,6 +46,7 @@ class SlowAlphaEvidence:
         holdout_mean_net_return: float,
         profit_factor: float,
         profitable_folds: int,
+        annual_stability_passed: bool = False,
     ) -> "SlowAlphaEvidence":
         gate = (
             holdout_trades >= 30
@@ -65,6 +67,7 @@ class SlowAlphaEvidence:
             profit_factor=profit_factor,
             profitable_folds=profitable_folds,
             evidence_gate_passed=gate,
+            annual_stability_passed=annual_stability_passed,
         )
 
 
@@ -181,7 +184,12 @@ class DualClockChronos:
         reasons: list[str] = []
         trust = head_specific_trust(self.transition_model.calibration_report)
 
-        if not slow_alpha.evidence_gate_passed:
+        if not slow_alpha.evidence_gate_passed or not slow_alpha.annual_stability_passed:
+            rejection_reasons = []
+            if not slow_alpha.evidence_gate_passed:
+                rejection_reasons.append("slow_alpha_failed_frozen_evidence_gate")
+            if not slow_alpha.annual_stability_passed:
+                rejection_reasons.append("slow_alpha_failed_annual_stability_gate")
             return DualClockDecision(
                 version=CHRONOS_DUAL_CLOCK_VERSION,
                 alpha_id=slow_alpha.alpha_id,
@@ -193,7 +201,7 @@ class DualClockChronos:
                 flow_alignment=0.0,
                 predicted_liquidity_change=0.0,
                 spread_bps=state.spread_bps,
-                reasons=("slow_alpha_failed_frozen_evidence_gate",),
+                reasons=tuple(rejection_reasons),
                 fast_forecast=None,
             )
 
