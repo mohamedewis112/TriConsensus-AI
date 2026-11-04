@@ -25,7 +25,7 @@ from .chronos_learning import (
 )
 
 
-CHRONOS_HYBRID_VERSION = "v8.2-chronos-hybrid-world-0"
+CHRONOS_HYBRID_VERSION = "v8.13-chronos-hybrid-integrity-0"
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,10 @@ class WorldModelTrustPassport:
     sample_count: int
     calibrated: bool
     mean_interval_coverage: float
+    next_return_directional_accuracy: float
+    next_return_directional_wilson_lower_95: float
+    next_return_correlation: float
+    predictive_skill: bool
     drift_detected: bool
     ensemble_return_std: float
     ensemble_orderflow_std: float
@@ -288,6 +292,10 @@ class ChronosArtificialMarketCivilization:
             sample_count=gate.sample_count,
             calibrated=gate.calibrated,
             mean_interval_coverage=gate.mean_interval_coverage,
+            next_return_directional_accuracy=gate.next_return_directional_accuracy,
+            next_return_directional_wilson_lower_95=gate.next_return_directional_wilson_lower_95,
+            next_return_correlation=gate.next_return_correlation,
+            predictive_skill=gate.predictive_skill,
             drift_detected=gate.drift_detected,
             ensemble_return_std=forecast.next_return_std if forecast else 0.0,
             ensemble_orderflow_std=forecast.next_order_flow_std if forecast else 0.0,
@@ -353,14 +361,17 @@ class ChronosArtificialMarketCivilization:
             world_mode = "transparent_fallback"
 
         trust = self._trust(gate, transition)
+        round_trip_cost = self.learned_engine.round_trip_cost
         long_ok = (
             future.positive_probability >= 0.62
             and future.future_diversity >= 0.70
+            and future.median_return > round_trip_cost
             and future.expected_shortfall_05 > -0.04
         )
         short_ok = (
             future.negative_probability >= 0.62
             and future.future_diversity >= 0.70
+            and (-future.median_return) > round_trip_cost
             and future.expected_shortfall_05 > -0.04
         )
         if not gate.research_ready:
