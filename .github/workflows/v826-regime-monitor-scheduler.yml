@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: v826-regime-monitor
@@ -41,12 +42,39 @@ jobs:
           PYTHONPATH: backend
         run: python -m triconsensus.chronos_regime_gated_ab
 
-      - name: Upload regime monitor artifact
+      - name: Collect prior V8.26 monitor evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/v826-history
+          if [ -f artifacts/chronos-v826-regime-gated-ab.json ]; then
+            cp artifacts/chronos-v826-regime-gated-ab.json artifacts/v826-history/current.json
+          fi
+          gh api --paginate             "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=chronos-v826-regime-monitor&per_page=100"             --jq '.artifacts[] | select(.expired == false) | .id'             | head -100             | while read -r artifact_id; do
+                [ -z "$artifact_id" ] && continue
+                zip_path="/tmp/v826-${artifact_id}.zip"
+                if gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path"; then
+                  mkdir -p "artifacts/v826-history/${artifact_id}"
+                  unzip -oq "$zip_path" -d "artifacts/v826-history/${artifact_id}" || true
+                fi
+              done
+
+      - name: Build V8.27 independent match ledger
+        if: always()
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.chronos_match_ledger             --input-dir artifacts/v826-history             --output artifacts/chronos-v827-match-ledger.json
+
+      - name: Upload regime monitor and evidence ledger
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: chronos-v826-regime-monitor
-          path: artifacts/chronos-v826-regime-gated-ab.json
+          path: |
+            artifacts/chronos-v826-regime-gated-ab.json
+            artifacts/chronos-v827-match-ledger.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 30
 
