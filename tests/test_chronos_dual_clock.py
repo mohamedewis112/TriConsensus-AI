@@ -78,6 +78,7 @@ def _validated_long() -> SlowAlphaEvidence:
         holdout_mean_net_return=0.0012,
         profit_factor=1.55,
         profitable_folds=3,
+        annual_stability_passed=True,
     )
 
 
@@ -136,4 +137,26 @@ def test_dual_clock_rejects_unvalidated_slow_alpha_before_fast_model():
         state=data[-1].state,
     )
     assert decision.verdict == "REJECT_SLOW_ALPHA"
+    assert decision.fast_forecast is None
+
+
+
+def test_dual_clock_rejects_missing_annual_stability_even_when_local_metrics_pass():
+    model = ProbabilisticTransitionEnsemble(
+        heads=5,
+        minimum_samples=180,
+        seed=1818,
+    )
+    data = _data()
+    model.fit(data)
+    locally_good_but_incomplete = replace(
+        _validated_long(),
+        annual_stability_passed=False,
+    )
+    decision = DualClockChronos(model).assess(
+        slow_alpha=locally_good_but_incomplete,
+        state=data[-1].state,
+    )
+    assert decision.verdict == "REJECT_SLOW_ALPHA"
+    assert "slow_alpha_failed_annual_stability_gate" in decision.reasons
     assert decision.fast_forecast is None
