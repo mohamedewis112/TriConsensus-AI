@@ -44,7 +44,7 @@ def resolve_due_receipts(
 
 async def main() -> None:
     training_seconds = 200
-    forward_seconds = 100
+    forward_seconds = 270
     forecast_every_seconds = 5
     horizon_seconds = 30
     universes = 20_000
@@ -150,7 +150,7 @@ async def main() -> None:
                 await asyncio.sleep(delay)
 
     report = {
-        "version": "v8.14-fresh-forward-shadow-all-forecasts-0",
+        "version": "v8.15-fresh-forward-qualifiable-window-0",
         "generated_at": datetime.now(UTC).isoformat(),
         "source": "PUBLIC_LIVE_OKX_PERP_COINBASE_SPOT",
         "training_seconds": training_seconds,

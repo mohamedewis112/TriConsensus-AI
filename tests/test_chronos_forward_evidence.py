@@ -69,3 +69,13 @@ def test_overlapping_forecasts_are_collapsed_to_independent_horizons():
     assert audit.non_overlapping_sample_count < audit.sample_count
     assert audit.paper_trading_authority is False
     assert audit.live_trading_authority is False
+
+
+def test_configured_forward_window_can_supply_minimum_non_overlapping_evidence():
+    forward_seconds = 270
+    horizon_seconds = 30
+    forecast_every_seconds = 5
+    max_non_overlapping = 1 + (forward_seconds - horizon_seconds) // horizon_seconds
+    total_forecasts = 1 + (forward_seconds - 1) // forecast_every_seconds
+    assert max_non_overlapping >= 8
+    assert total_forecasts >= 20

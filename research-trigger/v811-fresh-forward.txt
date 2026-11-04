@@ -1,1 +1,1 @@
-retrigger v8.14 fresh-forward all learned forecasts
+retrigger v8.15 fresh-forward statistically qualifiable window
