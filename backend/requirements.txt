@@ -1,0 +1,9 @@
+fastapi==0.162.0
+pydantic==2.14.1
+pydantic-settings==2.16.1
+httpx==0.28.1
+orjson==3.13.0
+numpy==2.5.4
+pandas==3.1.0
+supabase==2.33.0
+langgraph==1.2.18

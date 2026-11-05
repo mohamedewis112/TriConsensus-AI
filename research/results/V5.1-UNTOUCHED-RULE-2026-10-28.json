@@ -1,0 +1,65 @@
+{
+  "experiment": "V5.1-UNTOUCHED-DIRECTIONAL-RULE-GATE-2026-10-28",
+  "status": "passed_untouched_rule_gate_cross_year_replication_pending",
+  "default_action": "NO_TRADE",
+  "paper_only": true,
+  "target_venue": "Bybit",
+  "context_venue": "Binance USD-M Futures",
+  "feature": "global_long_short_change_1h",
+  "relationship": "negative",
+  "rule": "bottom calibration decile => LONG; top calibration decile => SHORT",
+  "horizon_minutes": 180,
+  "context_execution_lag_minutes": 15,
+  "round_trip_cost": 0.0015,
+  "calibration": {
+    "days": 180,
+    "end_date": "2024-11-30"
+  },
+  "untouched_test": {
+    "days": 60,
+    "end_date": "2024-05-31"
+  },
+  "note": "Compounded-return figures are full-notional diagnostics only, not portfolio return projections or risk-sized performance.",
+  "BTCUSDT": {
+    "qualified": true,
+    "thresholds": {
+      "low": -0.029245710437936556,
+      "high": 0.029188759033336675
+    },
+    "trades": 222,
+    "longs": 109,
+    "shorts": 113,
+    "hit_rate": 0.7657657657657657,
+    "mean_net_return": 0.005098578218129228,
+    "profit_factor": 3.790110919208404,
+    "profitable_folds": 4,
+    "folds": 4,
+    "bootstrap_lcb_95": 0.003920675650165928,
+    "max_drawdown_full_notional": 0.0731862060523095,
+    "full_notional_compounded_return_diagnostic": 2.0501753244776824
+  },
+  "ETHUSDT": {
+    "qualified": true,
+    "thresholds": {
+      "low": -0.027225911244074474,
+      "high": 0.027192193559133937
+    },
+    "trades": 280,
+    "longs": 147,
+    "shorts": 133,
+    "hit_rate": 0.7142857142857143,
+    "mean_net_return": 0.004356067201753146,
+    "profit_factor": 2.67861421794605,
+    "profitable_folds": 4,
+    "folds": 4,
+    "bootstrap_lcb_95": 0.003027041549873157,
+    "max_drawdown_full_notional": 0.1183132576766824,
+    "full_notional_compounded_return_diagnostic": 2.297404817955746
+  },
+  "source_run": {
+    "run_id": 40614744153,
+    "btc_job_id": 122574484242,
+    "eth_job_id": 122574483615
+  },
+  "next_gate": "Chronological cross-year replication in 2023 using the same frozen feature, inverse-direction rule, decile calibration procedure, 3h hold, 15m context lag, and 15bps round-trip cost."
+}

@@ -1,0 +1,34 @@
+name: V8.19 CHRONOS WebSocket Nervous System CI
+
+on:
+  push:
+    branches: ["feat/**"]
+    paths:
+      - "backend/triconsensus/chronos_ws_nervous_system.py"
+      - "tests/test_chronos_ws_nervous_system.py"
+      - ".github/workflows/v819-chronos-ws-nervous-ci.yml"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ws-nervous-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=8.3,<9" "websockets>=15,<16"
+      - name: Test message parsing and feature extraction
+        env:
+          PYTHONPATH: backend
+        run: pytest -q tests/test_chronos_ws_nervous_system.py
+      - name: Probe public OKX 100ms book and trade feed
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.chronos_ws_nervous_system

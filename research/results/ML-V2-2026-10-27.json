@@ -1,0 +1,46 @@
+{
+  "experiment": "ML-V2-2026-10-27",
+  "status": "rejected_pending_independent_replication",
+  "methodology": "Purged nested walk-forward regression with 4-row embargo and untouched final holdout",
+  "data_source": "bybit_public_archive",
+  "timeframe": "15m",
+  "history_days": 14,
+  "round_trip_cost": 0.0015,
+  "note": "Neither symbol passed the evidence gate. ETH holdout is encouraging but selection-fold instability prevents activation.",
+  "BTCUSDT": {
+    "selected_model_family": "catboost",
+    "selection": {
+      "folds": 4,
+      "mean_net_edge": -0.00100994233057941,
+      "mean_rank_ic": 0.041233123312331234,
+      "profitable_folds": 0
+    },
+    "holdout": {
+      "rows": 220,
+      "trade_count": 15,
+      "hit_rate": 0.6666666666666666,
+      "mean_net_edge": 0.000455464744107527,
+      "rank_ic": 0.04500318376224904,
+      "mse_improvement_vs_baseline": -0.018874317634352364
+    },
+    "evidence_gate_passed": false
+  },
+  "ETHUSDT": {
+    "selected_model_family": "catboost",
+    "selection": {
+      "folds": 4,
+      "mean_net_edge": -0.0014316594759628929,
+      "mean_rank_ic": -0.022709270927092712,
+      "profitable_folds": 0
+    },
+    "holdout": {
+      "rows": 220,
+      "trade_count": 20,
+      "hit_rate": 0.7,
+      "mean_net_edge": 0.0004909150083840755,
+      "rank_ic": 0.2500656474870818,
+      "mse_improvement_vs_baseline": 0.07157040610871916
+    },
+    "evidence_gate_passed": false
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "experiment": "V5-TRIPLE-WINDOW-CROSS-SYMBOL-2026-10-28",
+  "status": "passed_strong_research_evidence_not_trading_activation",
+  "methodology": "Frozen V5 cross-venue derivatives evidence with 15-minute lagged Binance USD-M positioning context against Bybit 15m returns. Three disjoint 90-day windows (2023-11-30, 2024-08-31, 2024-11-30), BTCUSDT and ETHUSDT, four-fold stability screen, 15 bps round-trip cost adjustment.",
+  "windows": [
+    {
+      "end_date": "2023-11-30",
+      "role": "third_untouched_validation"
+    },
+    {
+      "end_date": "2024-08-31",
+      "role": "replication"
+    },
+    {
+      "end_date": "2024-11-30",
+      "role": "discovery"
+    }
+  ],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "total_symbol_windows": 6,
+  "final_replicated_count": 3,
+  "final_replicated": [
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 12,
+      "horizon_minutes": 180,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.34301340885933446,
+      "worst_cost_adjusted_decile_spread": 0.007913527792020099,
+      "same_direction_across_all_six_symbol_windows": true,
+      "interpretation": "A stronger 1h increase in global long/short positioning consistently predicts weaker subsequent 3h returns; a contrarian crowd-positioning effect."
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 24,
+      "horizon_minutes": 360,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.2656337947056037,
+      "worst_cost_adjusted_decile_spread": 0.007701284358914456,
+      "same_direction_across_all_six_symbol_windows": true,
+      "interpretation": "The contrarian crowd-positioning effect persists at the 6h horizon."
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 48,
+      "horizon_minutes": 720,
+      "sign": "negative",
+      "worst_abs_rank_ic": 0.1906740379619829,
+      "worst_cost_adjusted_decile_spread": 0.008290691143497491,
+      "same_direction_across_all_six_symbol_windows": true,
+      "interpretation": "The same effect remains detectable at the 12h horizon."
+    }
+  ],
+  "rejected_after_third_window": [
+    {
+      "feature": "top_account_long_short_log",
+      "horizon_candles": 12,
+      "reason": "Passed the first two-window cross-symbol gate but did not re-qualify on the untouched 2023 BTC/ETH window."
+    }
+  ],
+  "strongest_candidate": {
+    "feature": "global_long_short_change_1h",
+    "horizon_candles": 12,
+    "horizon_minutes": 180,
+    "sign": "negative",
+    "worst_abs_rank_ic": 0.34301340885933446,
+    "worst_cost_adjusted_decile_spread": 0.007913527792020099
+  },
+  "default_action": "NO_TRADE",
+  "next_gate": "Build a preregistered deterministic V5.1 signal from global_long_short_change_1h only, calibrate thresholds on discovery data only, and test on a fourth untouched window before any paper-trading activation."
+}

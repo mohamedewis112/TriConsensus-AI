@@ -1,0 +1,170 @@
+{
+  "experiment": "V4-STRICT-CROSS-YEAR-COMPARISON-2023-2024",
+  "status": "rejected_no_stable_cross_year_edge",
+  "setup_version": "v4.1-frozen-quant-setups",
+  "methodology": "Same setup_research methodology with single-open-trade non-overlap, 15 bps round-trip cost, 12-candle horizon, gap-safe data and identical setup rules.",
+  "windows": {
+    "BTC_2023": {
+      "days": 300,
+      "end_date": "2023-11-30",
+      "coverage_ratio": 1
+    },
+    "BTC_2024": {
+      "days": 300,
+      "end_date": "2024-11-30",
+      "coverage_ratio": 0.9160069444444444
+    },
+    "ETH_2023": {
+      "days": 300,
+      "end_date": "2023-11-30",
+      "coverage_ratio": 1
+    },
+    "ETH_2024_clean": {
+      "days": 244,
+      "end_date": "2024-11-30",
+      "coverage_ratio": 1
+    }
+  },
+  "qualified_count": {
+    "BTC_2023": 0,
+    "BTC_2024": 0,
+    "ETH_2023": 0,
+    "ETH_2024_clean": 0
+  },
+  "conclusion": "No preregistered candidate demonstrated stable positive net edge across 2023 and 2024. Several 2024 pockets reversed to negative net returns and profit factor below 1 in 2023. Default action remains NO_TRADE.",
+  "comparisons": [
+    {
+      "symbol": "BTCUSDT",
+      "setup": "trend_pullback",
+      "regime": "trend_down|mid_vol|momentum_down",
+      "side": "SHORT",
+      "y2024": {
+        "trades": 13,
+        "mean_net_return": 0.002571288520450681,
+        "profit_factor": 3.211134318654966,
+        "profitable_folds": 4,
+        "folds": 4,
+        "bootstrap_lcb_95": 0.0003940279944737676
+      },
+      "y2023": {
+        "trades": 14,
+        "mean_net_return": -0.0004891912058833682,
+        "profit_factor": 0.7543574211983373,
+        "profitable_folds": 2,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.002242451259068708
+      }
+    },
+    {
+      "symbol": "BTCUSDT",
+      "setup": "trend_continuation",
+      "regime": "range|high_vol|momentum_down",
+      "side": "SHORT",
+      "y2024": {
+        "trades": 52,
+        "mean_net_return": 0.0012768304959832498,
+        "profit_factor": 1.4027190550145112,
+        "profitable_folds": 3,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0008305239450446502
+      },
+      "y2023": {
+        "trades": 42,
+        "mean_net_return": -0.0012207463419734218,
+        "profit_factor": 0.6301302344658545,
+        "profitable_folds": 1,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.002681929228237424
+      }
+    },
+    {
+      "symbol": "BTCUSDT",
+      "setup": "breakout",
+      "regime": "range|high_vol|momentum_down",
+      "side": "SHORT",
+      "y2024": {
+        "trades": 14,
+        "mean_net_return": -0.0018987977053147715,
+        "profit_factor": 0.6457941694209811,
+        "profitable_folds": 1,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.006035270810534461
+      },
+      "y2023": {
+        "trades": 14,
+        "mean_net_return": -0.004074578883714501,
+        "profit_factor": 0.17643443429752206,
+        "profitable_folds": 1,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0061117333418391415
+      }
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "breakout",
+      "regime": "trend_up|high_vol|momentum_down",
+      "side": "SHORT",
+      "y2024": {
+        "trades": 2,
+        "mean_net_return": -0.01336120849741226,
+        "profit_factor": 0,
+        "profitable_folds": 0,
+        "folds": 1,
+        "bootstrap_lcb_95": -0.014465238541149547
+      },
+      "y2023": {
+        "trades": 5,
+        "mean_net_return": -0.0017275362001512497,
+        "profit_factor": 0.4643161387806758,
+        "profitable_folds": 2,
+        "folds": 3,
+        "bootstrap_lcb_95": -0.006357012700122178
+      }
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "breakout",
+      "regime": "trend_down|high_vol|momentum_up",
+      "side": "LONG",
+      "y2024": {
+        "trades": 3,
+        "mean_net_return": 0.0014805868759611887,
+        "profit_factor": 1.3835703971634103,
+        "profitable_folds": 1,
+        "folds": 2,
+        "bootstrap_lcb_95": -0.006414084043169702
+      },
+      "y2023": {
+        "trades": 3,
+        "mean_net_return": -0.006982945202183564,
+        "profit_factor": 0,
+        "profitable_folds": 0,
+        "folds": 3,
+        "bootstrap_lcb_95": -0.008886391047666689
+      }
+    },
+    {
+      "symbol": "ETHUSDT",
+      "setup": "trend_pullback",
+      "regime": "range|low_vol|momentum_up",
+      "side": "SHORT",
+      "y2024": {
+        "trades": 12,
+        "mean_net_return": 0.0020862290206345364,
+        "profit_factor": 2.566691875717707,
+        "profitable_folds": 2,
+        "folds": 3,
+        "bootstrap_lcb_95": -0.00007112663365452793
+      },
+      "y2023": {
+        "trades": 32,
+        "mean_net_return": -0.0012437777417554274,
+        "profit_factor": 0.49431662079777955,
+        "profitable_folds": 1,
+        "folds": 4,
+        "bootstrap_lcb_95": -0.0022430996942938526
+      }
+    }
+  ],
+  "default_action": "NO_TRADE"
+}

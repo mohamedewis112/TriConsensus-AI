@@ -1,0 +1,4 @@
+# Optional V6 MARL/streaming runtime.
+# Core V5.1/V6 shadow CI does not require these heavy packages.
+torch>=2.9,<3
+websockets>=15,<16

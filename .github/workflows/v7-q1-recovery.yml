@@ -1,0 +1,44 @@
+name: V7 Q1 Recovery Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v7-q1-recovery.txt"
+      - "backend/triconsensus/kline_archive.py"
+      - "backend/triconsensus/archive_data.py"
+      - ".github/workflows/v7-q1-recovery.yml"
+
+jobs:
+  q1-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        symbol: ["BTCUSDT", "ETHUSDT"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install V7 research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "scikit-learn>=1.6,<2"
+      - name: Run frozen V7.0 Q1 with corrected day-level archive fallback
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m triconsensus.v7_research \
+            --symbol "${{ matrix.symbol }}" \
+            --days 91 \
+            --end-date "2026-01-19" \
+            --output-dir "research-output/Q1/${{ matrix.symbol }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "v7-q1-recovery-${{ matrix.symbol }}"
+          path: "research-output/Q1/${{ matrix.symbol }}/v7-report.json"
+          if-no-files-found: error
+          retention-days: 14

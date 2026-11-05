@@ -1,0 +1,41 @@
+services:
+  v6-microstructure:
+    build:
+      context: ..
+      dockerfile: deploy/v6-shadow.Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "triconsensus.v6_microstructure_worker"]
+    environment:
+      TRADING_MODE: paper
+      V6_MARL_OBSERVE: "true"
+      V6_MARL_ENABLED: "false"
+      V6_MARL_SHADOW_MODE: "true"
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      BYBIT_WS_URL: ${BYBIT_WS_URL:-wss://stream.bybit.com/v5/public/linear}
+      BINANCE_WS_URL: ${BINANCE_WS_URL:-wss://fstream.binance.com/public/ws}
+      V6_MICROSTRUCTURE_PERSIST_INTERVAL_MS: ${V6_MICROSTRUCTURE_PERSIST_INTERVAL_MS:-250}
+
+  v6-policy:
+    build:
+      context: ..
+      dockerfile: deploy/v6-shadow.Dockerfile
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          python -m triconsensus.v6_policy_worker
+          sleep "${V6_POLICY_POLL_SECONDS:-60}"
+        done
+    environment:
+      TRADING_MODE: paper
+      V6_MARL_OBSERVE: "true"
+      V6_MARL_ENABLED: "false"
+      V6_MARL_SHADOW_MODE: "true"
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      V6_REWARD_WINDOW: ${V6_REWARD_WINDOW:-40}
+      V6_MIN_WARMUP_TRADES_PER_ASSET: ${V6_MIN_WARMUP_TRADES_PER_ASSET:-20}
+      V6_DRAWDOWN_PENALTY: ${V6_DRAWDOWN_PENALTY:-2.0}

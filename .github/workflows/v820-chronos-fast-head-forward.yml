@@ -1,0 +1,45 @@
+name: V8.20 CHRONOS Fast Head Forward CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v820-fast-head-forward.txt"
+      - "backend/triconsensus/chronos_fast_forward.py"
+      - "backend/triconsensus/chronos_public_live.py"
+      - "backend/triconsensus/chronos_learning.py"
+      - "tests/test_chronos_fast_forward.py"
+      - ".github/workflows/v820-chronos-fast-head-forward.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fast-head-forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "pytest>=8.3,<9"
+      - name: Test fast-head evidence ledger
+        env:
+          PYTHONPATH: backend
+        run: pytest -q tests/test_chronos_fast_forward.py
+      - name: Run frozen fast-head fresh-forward evidence
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.chronos_fast_forward
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chronos-v820-fast-head-forward
+          path: artifacts/chronos-v820-fast-head-forward.json
+          if-no-files-found: ignore
+          retention-days: 14

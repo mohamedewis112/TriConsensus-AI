@@ -1,0 +1,45 @@
+name: V8.11 CHRONOS Fresh Forward Shadow
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/v1-foundation"]
+    paths:
+      - "research-trigger/v811-fresh-forward.txt"
+      - "backend/triconsensus/chronos_forward_shadow.py"
+      - "backend/triconsensus/chronos_public_live.py"
+      - "backend/triconsensus/chronos_learning.py"
+      - "backend/triconsensus/chronos_hybrid.py"
+      - ".github/workflows/v811-chronos-fresh-forward.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt "pytest>=8.3,<9"
+      - name: Test horizon-locked forward ledger
+        env:
+          PYTHONPATH: backend
+        run: pytest -q tests/test_chronos_forward_shadow.py
+      - name: Run frozen-model public fresh-forward shadow
+        env:
+          PYTHONPATH: backend
+        run: python -m triconsensus.chronos_forward_shadow
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chronos-v811-fresh-forward
+          path: artifacts/chronos-v811-fresh-forward.json
+          if-no-files-found: ignore
+          retention-days: 14

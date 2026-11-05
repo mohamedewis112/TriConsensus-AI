@@ -1,0 +1,83 @@
+{
+  "experiment": "V5-CROSS-VENUE-DERIVATIVES-EVIDENCE-LAGGED-2026-10-28",
+  "status": "replicated_evidence_candidates_not_trading_strategy",
+  "default_action": "NO_TRADE",
+  "paper_only": true,
+  "target_venue": "Bybit",
+  "context_venue": "Binance USD-M Futures",
+  "context_source": "Binance Vision static daily metrics",
+  "timeframe": "15m",
+  "context_execution_lag_minutes": 15,
+  "windows": [
+    {
+      "name": "discovery",
+      "days": 90,
+      "end_date": "2024-11-30"
+    },
+    {
+      "name": "replication",
+      "days": 90,
+      "end_date": "2024-08-31"
+    }
+  ],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "round_trip_cost": 0.0015,
+  "qualification": {
+    "minimum_abs_mean_rank_ic": 0.03,
+    "minimum_same_sign_folds": 3,
+    "minimum_profitable_spread_folds": 3,
+    "cross_symbol_requires_same_feature_horizon_and_ic_sign": true
+  },
+  "conclusion": "Pure derivatives context produced the first evidence family to replicate across two disjoint windows and both BTCUSDT and ETHUSDT after a conservative one-candle (15m) availability lag. This is evidence only; no trading activation is authorized.",
+  "cross_symbol_replicated": [
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 12,
+      "horizon_hours": 3,
+      "relationship": "negative",
+      "worst_abs_rank_ic_across_all_four_tests": 0.34301340885933446,
+      "worst_cost_adjusted_decile_spread_across_all_four_tests": 0.010799007794681705
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 24,
+      "horizon_hours": 6,
+      "relationship": "negative",
+      "worst_abs_rank_ic_across_all_four_tests": 0.2656337947056037,
+      "worst_cost_adjusted_decile_spread_across_all_four_tests": 0.010733669327646462
+    },
+    {
+      "feature": "global_long_short_change_1h",
+      "horizon_candles": 48,
+      "horizon_hours": 12,
+      "relationship": "negative",
+      "worst_abs_rank_ic_across_all_four_tests": 0.1906740379619829,
+      "worst_cost_adjusted_decile_spread_across_all_four_tests": 0.011844584516038347
+    },
+    {
+      "feature": "top_account_long_short_log",
+      "horizon_candles": 12,
+      "horizon_hours": 3,
+      "relationship": "negative",
+      "worst_abs_rank_ic_across_all_four_tests": 0.09814782047218876,
+      "worst_cost_adjusted_decile_spread_across_all_four_tests": 0.0017273609611309
+    }
+  ],
+  "excluded_from_primary_evidence": [
+    {
+      "family": "open_interest_value_change",
+      "reason": "contains a mechanical price component and is retained as diagnostic evidence only"
+    }
+  ],
+  "source_runs": {
+    "lagged_validation_run_id": 40614217543,
+    "btc_discovery_job_id": 122572798443,
+    "btc_replication_job_id": 122572798292,
+    "eth_discovery_job_id": 122572798351,
+    "eth_replication_job_id": 122572798075
+  },
+  "next_gate": "Build an untouched rule-level event study using discovery-calibrated quantile thresholds and evaluate it on a separate untouched window before any ML or paper-trade activation."
+}

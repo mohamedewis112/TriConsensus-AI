@@ -1,0 +1,98 @@
+{
+  "experiment": "V5.1-FORWARD-PIPELINE-LIVE-2026-10-28T1108Z",
+  "paper_only": true,
+  "real_money_authorized": false,
+  "branch": "feat/v1-foundation",
+  "protocol": {
+    "strategy_version": "V5.1",
+    "feature": "global_long_short_change_1h",
+    "horizon_minutes": 180,
+    "context_lag_minutes": 15,
+    "round_trip_cost": 0.0015,
+    "calibration_hash": "84c9370ad5c25383cef7b7c00be15b24d0c5f6f636742e925a78779b47a017ef",
+    "experiment_config_hash": "b76546273434b348543fb4cd92d86ac0842e8b48c374fcaa83f37c8e08cfc2d0"
+  },
+  "ci": {
+    "source_commit": "00c102b45ecac51743dbb97041f2cc0c7057ffe4",
+    "workflow_run_id": 40675466235,
+    "conclusion": "success",
+    "frontend_build": "success",
+    "backend_fail_closed_tests": "success"
+  },
+  "staging_runtime": {
+    "project": "triconsensus-ai-preview",
+    "project_id": "prj_SVdHHHtWlSEGB70JvPZ5NIV9dw3o",
+    "deployment_id": "dpl_6ZZ98PwQDbpvvnmc4TMU4pcsV4Ub",
+    "target": "staging",
+    "region": "cdg1",
+    "status": "READY",
+    "sso_protection": "all",
+    "public_domains_attached": false,
+    "trading_mode": "paper",
+    "live_trading": false,
+    "control_api_configured": false
+  },
+  "automatic_pipeline": {
+    "collector_schedule_utc": "7,22,37,52 * * * *",
+    "signal_recorder_schedule_utc": "11,26,41,56 * * * *",
+    "forward_selector_schedule_utc": "12,27,42,57 * * * *",
+    "forward_evaluator_schedule_utc": "13,28,43,58 * * * *",
+    "watchdog_schedule_utc": "14,29,44,59 * * * *",
+    "latest_verified_cron_runs": {
+      "signal_recorder": "succeeded",
+      "selector": "succeeded",
+      "evaluator": "succeeded"
+    }
+  },
+  "latest_signal_state": {
+    "db_now": "2026-10-28T11:06:17.473236Z",
+    "BTC_USDT": {
+      "snapshots": 2,
+      "latest_context": "2026-10-28T10:30:00Z",
+      "feature_value": -0.0122766995273789,
+      "low_threshold": -0.019545157125130854,
+      "high_threshold": 0.020643022165240422,
+      "signal": "NO_TRADE"
+    },
+    "ETH_USDT": {
+      "snapshots": 2,
+      "latest_context": "2026-10-28T10:30:00Z",
+      "feature_value": 0.00625219125904986,
+      "low_threshold": -0.01949802950955428,
+      "high_threshold": 0.020743615937876794,
+      "signal": "NO_TRADE"
+    }
+  },
+  "scientific_forward_tracker": {
+    "forward_selections": 0,
+    "forward_outcomes": 0,
+    "selection_policy": "historical_rule_parity_non_overlapping",
+    "outcome_horizon_minutes": 180,
+    "outcome_cost": 0.0015,
+    "execution_simulation": false
+  },
+  "watchdog": {
+    "manual_check_status": "healthy",
+    "active_calibrations": 2,
+    "active_pipeline_jobs": 5,
+    "recent_success_pipeline_jobs": 5,
+    "btc_latest_ratio_at": "2026-10-28T11:00:00Z",
+    "eth_latest_ratio_at": "2026-10-28T11:00:00Z",
+    "critical_events": 0,
+    "fail_closed_default": "NO_TRADE"
+  },
+  "safety_counts": {
+    "agent_runs": 0,
+    "consensus_decisions": 0,
+    "risk_evaluations": 0,
+    "paper_trades": 0
+  },
+  "llm_runtime": {
+    "current_locked_model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "openrouter_key_present_in_staging": false,
+    "vercel_ai_gateway_assessed": true,
+    "migration_activated": false,
+    "reason": "V5.1 experiment hash locks the current model/provider behavior, and AI Gateway usage can involve credits. No provider/model drift or spend was introduced."
+  },
+  "conclusion": "The V5.1 60-day forward research pipeline is live, automatic, append-only, healthy, and fail-closed. No candidate signal exists at the latest observed context, therefore no agents, risk decision, or paper trade should run."
+}

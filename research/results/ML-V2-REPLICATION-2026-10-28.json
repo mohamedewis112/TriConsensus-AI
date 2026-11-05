@@ -1,0 +1,50 @@
+{
+  "experiment": "ML-V2-REPLICATION-2026-10-28",
+  "status": "rejected",
+  "methodology": "Unchanged ML-V2 methodology on a fully disjoint older Bybit window",
+  "data_source": "bybit_public_archive",
+  "timeframe": "15m",
+  "window": {
+    "days": 30,
+    "end_date": "2026-10-11",
+    "non_overlapping_with_initial_v2": true
+  },
+  "round_trip_cost": 0.0015,
+  "conclusion": "Initial positive holdout signal did not replicate. Neither BTC nor ETH qualifies for activation.",
+  "BTCUSDT": {
+    "selected_model_family": "catboost",
+    "selection": {
+      "folds": 4,
+      "mean_net_edge": -0.0013634771015506983,
+      "mean_rank_ic": -0.015693143930200177,
+      "profitable_folds": 1
+    },
+    "holdout": {
+      "rows": 527,
+      "trade_count": 57,
+      "hit_rate": 0.24561403508771928,
+      "mean_net_edge": -0.0014427891776024478,
+      "rank_ic": -0.032527641477071864,
+      "mse_improvement_vs_baseline": -0.06945235690826132
+    },
+    "evidence_gate_passed": false
+  },
+  "ETHUSDT": {
+    "selected_model_family": "catboost",
+    "selection": {
+      "folds": 4,
+      "mean_net_edge": 0.0005566204631628773,
+      "mean_rank_ic": 0.03374861077400648,
+      "profitable_folds": 3
+    },
+    "holdout": {
+      "rows": 527,
+      "trade_count": 50,
+      "hit_rate": 0.34,
+      "mean_net_edge": -0.0023519464929371236,
+      "rank_ic": -0.16971148706128975,
+      "mse_improvement_vs_baseline": -0.12075569984951175
+    },
+    "evidence_gate_passed": false
+  }
+}
